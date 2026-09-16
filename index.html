@@ -83,7 +83,33 @@ function followUp(id){let i=db.incidents.find(x=>x.id===id);$('#modal').innerHTM
     alert('No se pudo subir la foto o documento.');
   }
 }
-function editIncident(id){let i=db.incidents.find(x=>x.id===id),t=prompt('Título:',i.title);if(t!==null)i.title=t.trim()||i.title;let r=prompt('Responsable:',i.responsible||'');if(r!==null)i.responsible=r;save();showIncident(id)}
+function editIncident(id){
+  let i=db.incidents.find(x=>x.id===id);
+
+  let t=prompt('Título:',i.title);
+  if(t===null)return;
+  i.title=t.trim()||i.title;
+
+  let c=prompt(
+    'Categoría:\n\nDisponibles: '+(db.categories.join(', ')||'Ninguna'),
+    i.category||''
+  );
+  if(c===null)return;
+
+  c=c.trim();
+  if(c && !db.categories.includes(c)){
+    alert('La categoría debe existir en Config.');
+    return;
+  }
+  i.category=c;
+
+  let r=prompt('Responsable:',i.responsible||'');
+  if(r===null)return;
+  i.responsible=r.trim();
+
+  save();
+  showIncident(id);
+}
 function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2><select id=pw onchange=renderPlans()>${worksOpts()}</select></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seguir la ruta y seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(w){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}function addPlanFiles(fs){let w=$('#pw').value;fs.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf')).forEach(f=>db.plans.push({id:uid(),work:w,name:f.name,rev:'01',date:new Date().toISOString().slice(0,10),size:f.size}));save();renderPlans()}function renderPlans(){let w=$('#pw').value,a=db.plans.filter(p=>p.work===w);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}function updatePlan(id){let p=db.plans.find(x=>x.id===id),r=prompt('Nueva revisión:',p.rev);if(r){p.rev=r;p.date=new Date().toISOString().slice(0,10);save();renderPlans()}}function delPlan(id){if(confirm('¿Quitar plano?')){db.plans=db.plans.filter(x=>x.id!==id);save();renderPlans()}}function markPlan(id){alert('Flujo de localización: seleccionar plano → abrir página → zoom/desplazar → fijar vista → marcar con dedo/ratón → guardar captura en la incidencia. La interfaz queda reservada para el visor PDF del despliegue conectado.');}
 function actas(){let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.work)}</b><br>${esc(m.title)}</td><td>${m.date}</td><td>${m.incidents.length}</td><td>${esc(m.author)}</td></tr>`).join('');$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas.</div>'}</div>`}function createMinute(){if(!db.works.length)return alert('Primero crea una obra.');let w=prompt('Obra:',db.works[0]);if(!db.works.includes(w))return;let avail=db.incidents.filter(i=>i.work===w);if(!avail.length)return alert('No hay incidencias en esta obra.');let nums=prompt('Números a incluir separados por coma:',avail.map(i=>i.no).join(','));if(!nums)return;let sel=nums.split(',').map(x=>x.trim()),ids=avail.filter(i=>sel.includes(i.no)).map(i=>i.id),title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra';db.minutes.push({id:uid(),no:String(db.minutes.filter(m=>m.work===w).length+1).padStart(3,'0'),work:w,title,date:new Date().toISOString().slice(0,10),incidents:ids,author:db.user});save();actas()}
 function listados(){$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Listado general</h2><div class=toolbar><button class="btn primary" onclick=exportXLSX()>Exportar Excel</button><button class="btn ghost" onclick=window.print()>Imprimir</button></div></div>${incidentTable(db.incidents)}</div>`}function exportXLSX(){let rows=db.incidents.map(i=>({'Nº':i.no,'Obra':i.work,'Título':i.title,'Categoría':i.category,'Zona':i.zone,'Ubicación':i.location,'Responsable':i.responsible,'Estado':i.status,'Prioridad':i.priority,'Fecha':i.date,'Actualizada':i.updated,'Realizado por':i.author}));if(window.XLSX){let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Incidencias');XLSX.writeFile(wb,'PERLENTAUCHER_Incidencias.xlsx')}else exportCSV(rows)}function exportCSV(rows){let h=Object.keys(rows[0]||{'Nº':''}),csv='\ufeff'+[h,...rows.map(Object.values)].map(r=>r.map(v=>'"'+String(v||'').replaceAll('"','""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='PERLENTAUCHER_Incidencias.csv';a.click()}
