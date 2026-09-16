@@ -265,26 +265,40 @@ async function addImages(files){
   section('SEGUIMIENTO');
 
   for(let h of (i.history||[])){
-    checkPage(18);
+    let imgs=(h.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+    let docs=(h.files||[]).filter(f=>f.url&&!(f.type&&f.type.startsWith('image/')));
+
+    let textLines=d.splitTextToSize(String(h.text||'—'),170);
+    let minimumBlock=12+(textLines.length*5);
+
+    checkPage(minimumBlock);
+
+    d.setDrawColor(220);
+    d.line(20,y,190,y);
+    y+=6;
+
     d.setFont('helvetica','bold');
     d.setFontSize(9);
+    d.setTextColor(30);
     d.text(`${h.date||''} · ${h.author||''} · ${h.status||''}`,20,y);
     y+=6;
+
     textBlock(h.text||'',9);
 
-    let imgs=(h.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
-    await addImages(imgs);
+    if(imgs.length){
+      await addImages(imgs);
+    }
 
-    let docs=(h.files||[]).filter(f=>f.url&&!(f.type&&f.type.startsWith('image/')));
     for(let f of docs){
       checkPage(8);
       d.setFont('helvetica','normal');
       d.setFontSize(8);
+      d.setTextColor(70);
       d.text(`Documento adjunto: ${f.name}`,20,y);
       y+=6;
     }
 
-    y+=3;
+    y+=6;
   }
 
   let pages=d.getNumberOfPages();
