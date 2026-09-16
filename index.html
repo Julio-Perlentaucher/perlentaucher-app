@@ -412,7 +412,76 @@ if(minimumBlock<250){
     d.text(lines,20,y);
     y+=lines.length*5+5;
   }
+  async function loadImage(url){
+    try{
+      let r=await fetch(url);
+      let blob=await r.blob();
 
+      let data=await new Promise((resolve,reject)=>{
+        let reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=reject;
+        reader.readAsDataURL(blob);
+      });
+
+      let img=await new Promise((resolve,reject)=>{
+        let el=new Image();
+        el.onload=()=>resolve(el);
+        el.onerror=reject;
+        el.src=data;
+      });
+
+      return {data,img};
+    }catch(e){
+      console.error('No se pudo cargar imagen para el PDF',e);
+      return null;
+    }
+  }
+     async function addImages(files){
+    let loaded=[];
+
+    for(let f of files){
+      let image=await loadImage(f.url);
+      if(image)loaded.push(image);
+    }
+
+    if(!loaded.length)return;
+
+    if(loaded.length===1){
+      let {data,img}=loaded[0];
+      let maxW=170,maxH=120;
+      let ratio=Math.min(maxW/img.width,maxH/img.height);
+      let w=img.width*ratio,h=img.height*ratio;
+
+      checkPage(h+8);
+      d.addImage(data,'JPEG',20,y,w,h);
+      y+=h+8;
+      return;
+    }
+
+    let colW=82;
+    let gap=6;
+
+    for(let n=0;n<loaded.length;n+=2){
+      let pair=loaded.slice(n,n+2);
+
+      let dimensions=pair.map(({img})=>{
+        let ratio=Math.min(colW/img.width,75/img.height);
+        return {w:img.width*ratio,h:img.height*ratio};
+      });
+
+      let rowH=Math.max(...dimensions.map(x=>x.h));
+      checkPage(rowH+8);
+
+      pair.forEach(({data},j)=>{
+        let dim=dimensions[j];
+        let x=20+j*(colW+gap);
+        d.addImage(data,'JPEG',x,y,dim.w,dim.h);
+      });
+
+      y+=rowH+8;
+    }
+  }
   d.setTextColor(...g);
   d.setFont('helvetica','bold');
   d.setFontSize(18);
@@ -496,6 +565,11 @@ if(minimumBlock<250){
         y+=5;
 
         textBlock(h.text||'—',8);
+                let imgs=(h.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+
+        if(imgs.length){
+          await addImages(imgs);
+        }
       }
     }
     y+=4;
