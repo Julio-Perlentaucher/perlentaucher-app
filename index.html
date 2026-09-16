@@ -133,190 +133,172 @@ function editIncident(id){
   save();
   showIncident(id);
 }
-function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2><select id=pw onchange=renderPlans()>${worksOpts()}</select></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seguir la ruta y seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(w){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}async function addPlanFiles(fs){
+function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2><select id=pw onchange=renderPlans()>${worksOpts()}</select></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seguir la ruta y seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(w){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}
+async function addPlanFiles(fs){
   let w=$('#pw').value;
   let pdfs=fs.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
-
   if(!pdfs.length)return;
-
   try{
     setSync('Subiendo planos...');
-
     for(const file of pdfs){
       let stored=await uploadPlanStorage(file);
-
-      db.plans.push({
-        id:uid(),
-        work:w,
-        name:stored.name,
-        rev:'01',
-        date:new Date().toISOString().slice(0,10),
-        size:stored.size,
-        type:stored.type,
-        url:stored.url
-      });
+      db.plans.push({id:uid(),work:w,name:stored.name,rev:'01',date:new Date().toISOString().slice(0,10),size:stored.size,type:stored.type,url:stored.url});
     }
-
-    save();
-    renderPlans();
-
-  }catch(e){
-    console.error(e);
-    setSync('Error al subir plano');
-    alert('No se pudo subir el plano.');
-  }
-}function renderPlans(){let w=$('#pw').value,a=db.plans.filter(p=>p.work===w);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}function updatePlan(id){let p=db.plans.find(x=>x.id===id),r=prompt('Nueva revisión:',p.rev);if(r){p.rev=r;p.date=new Date().toISOString().slice(0,10);save();renderPlans()}}function delPlan(id){if(confirm('¿Quitar plano?')){db.plans=db.plans.filter(x=>x.id!==id);save();renderPlans()}}function markPlan(id){
-  let p=db.plans.find(x=>x.id===id);
-  if(!p)return;
-
+    save();renderPlans();
+  }catch(e){console.error(e);setSync('Error al subir plano');alert('No se pudo subir el plano.');}
+}
+function renderPlans(){let w=$('#pw').value,a=db.plans.filter(p=>p.work===w);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}
+function updatePlan(id){let p=db.plans.find(x=>x.id===id),r=prompt('Nueva revisión:',p.rev);if(r){p.rev=r;p.date=new Date().toISOString().slice(0,10);save();renderPlans()}}
+function delPlan(id){if(confirm('¿Quitar plano?')){db.plans=db.plans.filter(x=>x.id!==id);save();renderPlans()}}
+function markPlan(id){
+  let p=db.plans.find(x=>x.id===id);if(!p)return;
   let incidents=db.incidents.filter(i=>i.work===p.work);
-
-  if(!incidents.length){
-    alert('Esta obra no tiene incidencias.');
-    return;
-  }
-
+  if(!incidents.length)return alert('Esta obra no tiene incidencias.');
   let nums=incidents.map(i=>`${i.no} - ${i.title}`).join('\n');
-
-  let no=prompt(
-    `Selecciona la incidencia para localizar en este plano:\n\n${nums}\n\nEscribe el número de incidencia:`,
-    incidents[0].no
-  );
-
+  let no=prompt(`Selecciona la incidencia para localizar en este plano:\n\n${nums}\n\nEscribe el número de incidencia:`,incidents[0].no);
   if(no===null)return;
-
   let incident=incidents.find(i=>i.no===no.trim());
-
-  if(!incident){
-    alert('No se ha encontrado esa incidencia.');
-    return;
-  }
-
-    if(!p.url){
-    alert('Este plano todavía no tiene un archivo PDF guardado en la nube.');
-    return;
-  }
-
- openPlanViewer(p,incident);
-}async function openPlanViewer(p,incident){
-  if(!window.pdfjsLib){
-    alert('No se ha podido cargar el visor PDF.');
-    return;
-  }
-
-  pdfjsLib.GlobalWorkerOptions.workerSrc=
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
+  if(!incident)return alert('No se ha encontrado esa incidencia.');
+  if(!p.url)return alert('Este plano todavía no tiene un archivo PDF guardado en la nube.');
+  openPlanViewer(p,incident);
+}
+async function openPlanViewer(p,incident){
+  if(!window.pdfjsLib)return alert('No se ha podido cargar el visor PDF.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   $('#modal').classList.remove('hidden');
   $('#modal').innerHTML=`
     <div class="modalbox">
-      <div class="modalhead">
-        <div>
-          <h2>Localizar incidencia ${esc(incident.no)}</h2>
-          <div class="note">${esc(p.name)} · Rev. ${esc(p.rev)}</div>
-        </div>
-        <button class="x" onclick="closeModal()">×</button>
-      </div>
-
+      <div class="modalhead"><div><h2>Localizar incidencia ${esc(incident.no)}</h2><div class="note">${esc(p.name)} · Rev. ${esc(p.rev)}</div></div><button class="x" onclick="closeModal()">×</button></div>
       <div class="toolbar" style="margin:12px 0">
-  <button class="btn ghost" id="prevPlanPage">← Página</button>
-  <span id="planPageInfo">Cargando...</span>
-  <button class="btn ghost" id="nextPlanPage">Página →</button>
-
-  <button class="btn ghost" id="zoomOutPlan">− Zoom</button>
-  <span id="planZoomInfo">125%</span>
-  <button class="btn ghost" id="zoomInPlan">+ Zoom</button>
-</div>
-
+        <button class="btn ghost" id="prevPlanPage">← Página</button><span id="planPageInfo">Cargando...</span><button class="btn ghost" id="nextPlanPage">Página →</button>
+        <button class="btn ghost" id="zoomOutPlan">− Zoom</button><span id="planZoomInfo">125%</span><button class="btn ghost" id="zoomInPlan">+ Zoom</button>
+      </div>
+      <div class="note" style="margin-bottom:8px">Pulsa sobre el plano para guardar o mover la localización de la incidencia.</div>
       <div class="annotWrap" id="planAnnotWrap" style="position:relative">
-  <canvas id="planCanvas" style="display:block"></canvas>
-  <div id="planMarker"
-       style="display:none;position:absolute;width:26px;height:26px;border:4px solid #d32f2f;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none"></div>
-</div>
-    </div>
-  `;
-
+        <canvas id="planCanvas" style="display:block"></canvas>
+        <div id="planMarker" style="display:none;position:absolute;width:26px;height:26px;border:4px solid #d32f2f;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none"></div>
+      </div>
+    </div>`;
   try{
     const pdf=await pdfjsLib.getDocument(p.url).promise;
-    let pageNo=1;
-    let planScale=1.25;
+    const saved=incident.planCapture&&incident.planCapture.planId===p.id?incident.planCapture:null;
+    let pageNo=saved&&saved.page?Math.min(pdf.numPages,Math.max(1,+saved.page)):1;
+    let planScale=saved&&saved.zoom?Math.min(3,Math.max(.5,+saved.zoom)):1.25;
+    const canvas=$('#planCanvas'),marker=$('#planMarker');
+
+    function positionMarker(){
+      const cap=incident.planCapture;
+      if(cap&&cap.planId===p.id&&+cap.page===pageNo&&Number.isFinite(+cap.x)&&Number.isFinite(+cap.y)){
+        marker.style.left=(canvas.offsetLeft+(+cap.x*canvas.clientWidth))+'px';
+        marker.style.top=(canvas.offsetTop+(+cap.y*canvas.clientHeight))+'px';
+        marker.style.display='block';
+      }else marker.style.display='none';
+    }
+
     async function renderPage(){
       const page=await pdf.getPage(pageNo);
       const viewport=page.getViewport({scale:planScale});
-      const canvas=$('#planCanvas');
       const ctx=canvas.getContext('2d');
-
-      canvas.width=viewport.width;
-      canvas.height=viewport.height;
-
-      await page.render({
-        canvasContext:ctx,
-        viewport:viewport
-      }).promise;
-
-      $('#planPageInfo').textContent=
-        `Página ${pageNo} de ${pdf.numPages}`;
+      canvas.width=viewport.width;canvas.height=viewport.height;
+      await page.render({canvasContext:ctx,viewport}).promise;
+      $('#planPageInfo').textContent=`Página ${pageNo} de ${pdf.numPages}`;
+      $('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
+      positionMarker();
     }
 
-    $('#prevPlanPage').onclick=async()=>{
-      if(pageNo<=1)return;
-      pageNo--;
-      await renderPage();
+    $('#prevPlanPage').onclick=async()=>{if(pageNo<=1)return;pageNo--;await renderPage();};
+    $('#nextPlanPage').onclick=async()=>{if(pageNo>=pdf.numPages)return;pageNo++;await renderPage();};
+    $('#zoomOutPlan').onclick=async()=>{if(planScale<=.5)return;planScale=Math.max(.5,planScale-.25);await renderPage();};
+    $('#zoomInPlan').onclick=async()=>{if(planScale>=3)return;planScale=Math.min(3,planScale+.25);await renderPage();};
+
+    canvas.onclick=e=>{
+      const rect=canvas.getBoundingClientRect();
+      const x=e.clientX-rect.left,y=e.clientY-rect.top;
+      incident.planCapture={planId:p.id,planName:p.name,planRev:p.rev,planUrl:p.url,page:pageNo,zoom:planScale,x:x/canvas.clientWidth,y:y/canvas.clientHeight};
+      positionMarker();
+      save();
     };
-
-    $('#nextPlanPage').onclick=async()=>{
-      if(pageNo>=pdf.numPages)return;
-      pageNo++;
-      await renderPage();
-    };
-$('#zoomOutPlan').onclick=async()=>{
-  if(planScale<=0.5)return;
-  planScale-=0.25;
-  $('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
-  await renderPage();
-};
-
-$('#zoomInPlan').onclick=async()=>{
-  if(planScale>=3)return;
-  planScale+=0.25;
-  $('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
-  await renderPage();
-};
-const wrap=$('#planAnnotWrap');
-const canvas=$('#planCanvas');
-const marker=$('#planMarker');
-
-canvas.onclick=(e)=>{
-  const rect=canvas.getBoundingClientRect();
-
-  const x=e.clientX-rect.left;
-  const y=e.clientY-rect.top;
-
-  marker.style.left=(canvas.offsetLeft+x)+'px';
-  marker.style.top=(canvas.offsetTop+y)+'px';
-  marker.style.display='block';
-
-  incident.planCapture={
-    planId:p.id,
-    planName:p.name,
-    planRev:p.rev,
-    page:pageNo,
-    zoom:planScale,
-    x:x/canvas.clientWidth,
-    y:y/canvas.clientHeight
-  };
-
-  save();
-};
-  await renderPage();
-
-}catch(e){
-  console.error(e);
-  alert('No se pudo abrir el plano en el visor.');
-  closeModal();
+    await renderPage();
+  }catch(e){console.error(e);alert('No se pudo abrir el plano en el visor.');closeModal();}
 }
-}  
-function actas(){let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.work)}</b><br>${esc(m.title)}</td><td>${m.date}</td><td>${m.incidents.length}</td><td>${esc(m.author)}</td></tr>`).join('');$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas.</div>'}</div>`}function createMinute(){if(!db.works.length)return alert('Primero crea una obra.');let w=prompt('Obra:',db.works[0]);if(!db.works.includes(w))return;let avail=db.incidents.filter(i=>i.work===w);if(!avail.length)return alert('No hay incidencias en esta obra.');let nums=prompt('Números a incluir separados por coma:',avail.map(i=>i.no).join(','));if(!nums)return;let sel=nums.split(',').map(x=>x.trim()),ids=avail.filter(i=>sel.includes(i.no)).map(i=>i.id),title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra';db.minutes.push({id:uid(),no:String(db.minutes.filter(m=>m.work===w).length+1).padStart(3,'0'),work:w,title,date:new Date().toISOString().slice(0,10),incidents:ids,author:db.user});save();actas()}
+
+async function renderPlanCapture(cap){
+  if(!cap||!window.pdfjsLib)return null;
+  const plan=db.plans.find(p=>p.id===cap.planId);
+  const url=cap.planUrl||(plan&&plan.url);
+  if(!url)return null;
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf=await pdfjsLib.getDocument(url).promise;
+    const pageNo=Math.min(pdf.numPages,Math.max(1,+cap.page||1));
+    const page=await pdf.getPage(pageNo);
+    const viewport=page.getViewport({scale:1.5});
+    const c=document.createElement('canvas'),ctx=c.getContext('2d');
+    c.width=viewport.width;c.height=viewport.height;
+    await page.render({canvasContext:ctx,viewport}).promise;
+    if(Number.isFinite(+cap.x)&&Number.isFinite(+cap.y)){
+      const x=+cap.x*c.width,y=+cap.y*c.height,r=Math.max(10,c.width*.012);
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='rgba(211,47,47,.22)';ctx.fill();ctx.lineWidth=Math.max(4,r*.28);ctx.strokeStyle='#d32f2f';ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x-r*1.45,y);ctx.lineTo(x+r*1.45,y);ctx.moveTo(x,y-r*1.45);ctx.lineTo(x,y+r*1.45);ctx.lineWidth=Math.max(2,r*.16);ctx.strokeStyle='#d32f2f';ctx.stroke();
+    }
+    return {data:c.toDataURL('image/jpeg',.86),width:c.width,height:c.height,page:pageNo};
+  }catch(e){console.error('No se pudo preparar el plano para el informe',e);return null;}
+}
+async function addPlanCaptureToPDF(d,i,state){
+  if(!i.planCapture)return;
+  let shot=await renderPlanCapture(i.planCapture);if(!shot)return;
+  let y=state.y;
+  if(y+20>270){d.addPage();y=18;}
+  d.setTextColor(93,133,111);d.setFont('helvetica','bold');d.setFontSize(10);d.text('LOCALIZACIÓN EN PLANO',20,y);y+=6;
+  d.setTextColor(70);d.setFont('helvetica','normal');d.setFontSize(8);
+  let label=`${i.planCapture.planName||'Plano'} · Rev. ${i.planCapture.planRev||'—'} · Página ${shot.page}`;
+  let labelLines=d.splitTextToSize(label,170);d.text(labelLines,20,y);y+=labelLines.length*4+3;
+  let maxW=170,maxH=155,ratio=Math.min(maxW/shot.width,maxH/shot.height),w=shot.width*ratio,h=shot.height*ratio;
+  if(y+h>275){d.addPage();y=18;}
+  d.addImage(shot.data,'JPEG',20,y,w,h);y+=h+8;
+  state.y=y;
+}
+
+function actas(){
+  let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.work)}</b><br>${esc(m.title)}</td><td>${m.date}</td><td>${m.incidents.length}</td><td>${esc(m.author)}</td><td><button class="btn ghost" onclick="reportMinutePDF('${m.id}')">PDF</button></td></tr>`).join('');
+  $('#content').innerHTML=`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th><th></th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas.</div>'}</div>`;
+}
+function createMinute(){
+  if(!db.works.length)return alert('Primero crea una obra.');
+  let w=prompt('Obra:',db.works[0]);if(!db.works.includes(w))return;
+  let avail=db.incidents.filter(i=>i.work===w);if(!avail.length)return alert('No hay incidencias en esta obra.');
+  let nums=prompt('Números a incluir separados por coma:',avail.map(i=>i.no).join(','));if(!nums)return;
+  let sel=nums.split(',').map(x=>x.trim()),ids=avail.filter(i=>sel.includes(i.no)).map(i=>i.id);
+  if(!ids.length)return alert('No se ha seleccionado ninguna incidencia válida.');
+  let title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra';
+  db.minutes.push({id:uid(),no:String(Math.max(0,...db.minutes.filter(m=>m.work===w).map(m=>+m.no||0))+1).padStart(3,'0'),work:w,title,date:new Date().toISOString().slice(0,10),incidents:ids,author:db.user});
+  save();actas();
+}
+async function reportMinutePDF(id){
+  let m=db.minutes.find(x=>x.id===id);if(!m)return;
+  if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');
+  let incidents=(m.incidents||[]).map(id=>db.incidents.find(i=>i.id===id)).filter(Boolean);
+  let {jsPDF}=window.jspdf,d=new jsPDF({format:'a4'}),y=18,g=[93,133,111];
+  const check=n=>{if(y+n>275){d.addPage();y=18;}};
+  const block=(t,s=9)=>{d.setFont('helvetica','normal');d.setFontSize(s);let lines=d.splitTextToSize(String(t||'—'),170);check(lines.length*5+4);d.text(lines,20,y);y+=lines.length*5+4;};
+  d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(18);d.text('PERLENTAUCHER',20,y);y+=7;
+  d.setFontSize(10);d.text(`ACTA DE OBRA ${m.no}`,20,y);y+=13;
+  d.setTextColor(30);d.setFontSize(15);d.text(m.work,20,y);y+=8;d.setFontSize(12);d.text(m.title,20,y);y+=8;
+  d.setFont('helvetica','normal');d.setFontSize(9);d.text(`${m.date} · ${m.author} · ${incidents.length} incidencia(s)`,20,y);y+=12;
+  for(let i of incidents){
+    check(40);d.setDrawColor(215);d.line(20,y,190,y);y+=7;
+    d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(11);d.text(`${i.no} · ${i.title}`,20,y);y+=6;
+    d.setTextColor(30);d.setFontSize(8);d.setFont('helvetica','normal');
+    d.text(`Estado: ${i.status} · Prioridad: ${i.priority} · Responsable: ${i.responsible||'—'}`,20,y);y+=6;
+    d.text(`Categoría: ${i.category||'—'} · Zona: ${i.zone||'—'} · Ubicación: ${i.location||'—'}`,20,y);y+=7;
+    block(i.description||'—',9);
+    if(i.planCapture){let st={y};await addPlanCaptureToPDF(d,i,st);y=st.y;}
+    y+=4;
+  }
+  let pages=d.getNumberOfPages();
+  for(let p=1;p<=pages;p++){d.setPage(p);d.setFont('helvetica','normal');d.setFontSize(8);d.setTextColor(70);d.text(`Generado por: ${m.author}`,20,287);d.text(`Página ${p} de ${pages}`,190,287,{align:'right'});}
+  d.save(`${m.work} - ${m.title} - ${m.no}.pdf`);
+}
 function listados(){$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Listado general</h2><div class=toolbar><button class="btn primary" onclick=exportXLSX()>Exportar Excel</button><button class="btn ghost" onclick=window.print()>Imprimir</button></div></div>${incidentTable(db.incidents)}</div>`}function exportXLSX(){let rows=db.incidents.map(i=>({'Nº':i.no,'Obra':i.work,'Título':i.title,'Categoría':i.category,'Zona':i.zone,'Ubicación':i.location,'Responsable':i.responsible,'Estado':i.status,'Prioridad':i.priority,'Fecha':i.date,'Actualizada':i.updated,'Realizado por':i.author}));if(window.XLSX){let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Incidencias');XLSX.writeFile(wb,'PERLENTAUCHER_Incidencias.xlsx')}else exportCSV(rows)}function exportCSV(rows){let h=Object.keys(rows[0]||{'Nº':''}),csv='\ufeff'+[h,...rows.map(Object.values)].map(r=>r.map(v=>'"'+String(v||'').replaceAll('"','""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='PERLENTAUCHER_Incidencias.csv';a.click()}
 function informes(){
   let opciones=db.incidents.map(i=>`<option value="${i.id}">${esc(i.work)} - ${i.no} - ${esc(i.title)}</option>`).join('');
@@ -519,6 +501,12 @@ async function addImages(files){
   if(initialImages.length){
     section('FOTOGRAFÍAS');
     await addImages(initialImages);
+  }
+
+  if(i.planCapture){
+    let planState={y};
+    await addPlanCaptureToPDF(d,i,planState);
+    y=planState.y;
   }
 
   section('SEGUIMIENTO');
@@ -746,7 +734,15 @@ if(minimumBlock<250){
     d.text('Descripción',20,y);
     y+=5;
 
-    textBlock(i.description||'—',9);    if((i.history||[]).length){
+    textBlock(i.description||'—',9);
+
+    if(i.planCapture){
+      let planState={y};
+      await addPlanCaptureToPDF(d,i,planState);
+      y=planState.y;
+    }
+
+    if((i.history||[]).length){
       checkPage(15);
 
       d.setFont('helvetica','bold');
@@ -802,4 +798,3 @@ function delCat(c){if(db.incidents.some(i=>i.category===c))return alert('Categor
 function reportWord(id){let i=db.incidents.find(x=>x.id===id),name=`${i.work} - ${i.title} - ${i.no}.doc`,html=`<html><head><meta charset=utf-8><style>body{font-family:Arial;margin:40px}h1,h3{color:#5d856f}table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #ddd}</style></head><body><h1>PERLENTAUCHER</h1><h3>INFORME DE INCIDENCIA</h3><h2>${esc(i.work)} - ${i.no}<br>${esc(i.title)}</h2><table><tr><td>Categoría: ${esc(i.category||'—')}</td><td>Zona: ${esc(i.zone||'—')}</td><td>Ubicación: ${esc(i.location||'—')}</td></tr><tr><td>Responsable: ${esc(i.responsible||'—')}</td><td>Estado: ${esc(i.status)}</td><td>Prioridad: ${esc(i.priority)}</td></tr></table><h3>Descripción</h3><p>${esc(i.description||'')}</p><h3>Seguimiento</h3>${i.history.map(h=>`<p><b>${esc(h.date)} · ${esc(h.author)}</b><br>${esc(h.text)}</p>`).join('')}</body></html>`;let a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff',html],{type:'application/msword'}));a.download=name;a.click()}
 function closeModal(){$('#modal').classList.add('hidden')}if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});render();pullCloud(true);setInterval(()=>pullCloud(false),5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullCloud(false)});
 </script></body></html>
-
