@@ -197,7 +197,80 @@ function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card
     return;
   }
 
-  window.open(p.url,'_blank');
+ openPlanViewer(p,incident);
+}async function openPlanViewer(p,incident){
+  if(!window.pdfjsLib){
+    alert('No se ha podido cargar el visor PDF.');
+    return;
+  }
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc=
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  $('#modal').classList.remove('hidden');
+  $('#modal').innerHTML=`
+    <div class="modalbox">
+      <div class="modalhead">
+        <div>
+          <h2>Localizar incidencia ${esc(incident.no)}</h2>
+          <div class="note">${esc(p.name)} · Rev. ${esc(p.rev)}</div>
+        </div>
+        <button class="x" onclick="closeModal()">×</button>
+      </div>
+
+      <div class="toolbar" style="margin:12px 0">
+        <button class="btn ghost" id="prevPlanPage">← Página</button>
+        <span id="planPageInfo">Cargando...</span>
+        <button class="btn ghost" id="nextPlanPage">Página →</button>
+      </div>
+
+      <div class="annotWrap">
+        <canvas id="planCanvas"></canvas>
+      </div>
+    </div>
+  `;
+
+  try{
+    const pdf=await pdfjsLib.getDocument(p.url).promise;
+    let pageNo=1;
+
+    async function renderPage(){
+      const page=await pdf.getPage(pageNo);
+      const viewport=page.getViewport({scale:1.25});
+      const canvas=$('#planCanvas');
+      const ctx=canvas.getContext('2d');
+
+      canvas.width=viewport.width;
+      canvas.height=viewport.height;
+
+      await page.render({
+        canvasContext:ctx,
+        viewport:viewport
+      }).promise;
+
+      $('#planPageInfo').textContent=
+        `Página ${pageNo} de ${pdf.numPages}`;
+    }
+
+    $('#prevPlanPage').onclick=async()=>{
+      if(pageNo<=1)return;
+      pageNo--;
+      await renderPage();
+    };
+
+    $('#nextPlanPage').onclick=async()=>{
+      if(pageNo>=pdf.numPages)return;
+      pageNo++;
+      await renderPage();
+    };
+
+    await renderPage();
+
+  }catch(e){
+    console.error(e);
+    alert('No se pudo abrir el plano en el visor.');
+    closeModal();
+  }
 }
 function actas(){let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.work)}</b><br>${esc(m.title)}</td><td>${m.date}</td><td>${m.incidents.length}</td><td>${esc(m.author)}</td></tr>`).join('');$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas.</div>'}</div>`}function createMinute(){if(!db.works.length)return alert('Primero crea una obra.');let w=prompt('Obra:',db.works[0]);if(!db.works.includes(w))return;let avail=db.incidents.filter(i=>i.work===w);if(!avail.length)return alert('No hay incidencias en esta obra.');let nums=prompt('Números a incluir separados por coma:',avail.map(i=>i.no).join(','));if(!nums)return;let sel=nums.split(',').map(x=>x.trim()),ids=avail.filter(i=>sel.includes(i.no)).map(i=>i.id),title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra';db.minutes.push({id:uid(),no:String(db.minutes.filter(m=>m.work===w).length+1).padStart(3,'0'),work:w,title,date:new Date().toISOString().slice(0,10),incidents:ids,author:db.user});save();actas()}
 function listados(){$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Listado general</h2><div class=toolbar><button class="btn primary" onclick=exportXLSX()>Exportar Excel</button><button class="btn ghost" onclick=window.print()>Imprimir</button></div></div>${incidentTable(db.incidents)}</div>`}function exportXLSX(){let rows=db.incidents.map(i=>({'Nº':i.no,'Obra':i.work,'Título':i.title,'Categoría':i.category,'Zona':i.zone,'Ubicación':i.location,'Responsable':i.responsible,'Estado':i.status,'Prioridad':i.priority,'Fecha':i.date,'Actualizada':i.updated,'Realizado por':i.author}));if(window.XLSX){let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Incidencias');XLSX.writeFile(wb,'PERLENTAUCHER_Incidencias.xlsx')}else exportCSV(rows)}function exportCSV(rows){let h=Object.keys(rows[0]||{'Nº':''}),csv='\ufeff'+[h,...rows.map(Object.values)].map(r=>r.map(v=>'"'+String(v||'').replaceAll('"','""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='PERLENTAUCHER_Incidencias.csv';a.click()}
