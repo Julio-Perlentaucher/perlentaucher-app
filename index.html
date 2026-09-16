@@ -295,6 +295,18 @@ canvas.onclick=(e)=>{
   marker.style.left=(canvas.offsetLeft+x)+'px';
   marker.style.top=(canvas.offsetTop+y)+'px';
   marker.style.display='block';
+
+  incident.planCapture={
+    planId:p.id,
+    planName:p.name,
+    planRev:p.rev,
+    page:pageNo,
+    zoom:planScale,
+    x:x/canvas.clientWidth,
+    y:y/canvas.clientHeight
+  };
+
+  save();
 };
     await renderPage();
 
