@@ -107,7 +107,43 @@ function informes(){
     `:'<div class=empty>No hay incidencias disponibles para generar informes.</div>'}
   </div>`;
 }
-async function loadImage(url){
+async function reportPDF(id){
+  let i=db.incidents.find(x=>x.id===id);
+  let name=`${i.work} - ${i.title} - ${i.no}.pdf`;
+
+  if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');
+
+  let {jsPDF}=window.jspdf;
+  let d=new jsPDF({format:'a4'});
+  let g=[93,133,111];
+  let y=18;
+
+  function checkPage(needed=15){
+    if(y+needed>275){
+      d.addPage();
+      y=18;
+    }
+  }
+
+  function section(title){
+    checkPage(15);
+    d.setTextColor(...g);
+    d.setFont('helvetica','bold');
+    d.setFontSize(10);
+    d.text(title,20,y);
+    d.setTextColor(30);
+    y+=7;
+  }
+
+  function textBlock(text,size=10){
+    d.setFont('helvetica','normal');
+    d.setFontSize(size);
+    let lines=d.splitTextToSize(String(text||'—'),170);
+    checkPage(lines.length*5+5);
+    d.text(lines,20,y);
+    y+=lines.length*5+5;
+  }
+  async function loadImage(url){
   try{
     let r=await fetch(url);
     let blob=await r.blob();
