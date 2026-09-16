@@ -89,10 +89,15 @@ function actas(){let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.wor
 function listados(){$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Listado general</h2><div class=toolbar><button class="btn primary" onclick=exportXLSX()>Exportar Excel</button><button class="btn ghost" onclick=window.print()>Imprimir</button></div></div>${incidentTable(db.incidents)}</div>`}function exportXLSX(){let rows=db.incidents.map(i=>({'Nº':i.no,'Obra':i.work,'Título':i.title,'Categoría':i.category,'Zona':i.zone,'Ubicación':i.location,'Responsable':i.responsible,'Estado':i.status,'Prioridad':i.priority,'Fecha':i.date,'Actualizada':i.updated,'Realizado por':i.author}));if(window.XLSX){let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Incidencias');XLSX.writeFile(wb,'PERLENTAUCHER_Incidencias.xlsx')}else exportCSV(rows)}function exportCSV(rows){let h=Object.keys(rows[0]||{'Nº':''}),csv='\ufeff'+[h,...rows.map(Object.values)].map(r=>r.map(v=>'"'+String(v||'').replaceAll('"','""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='PERLENTAUCHER_Incidencias.csv';a.click()}
 function informes(){
   let opciones=db.incidents.map(i=>`<option value="${i.id}">${esc(i.work)} - ${i.no} - ${esc(i.title)}</option>`).join('');
-  $('#content').innerHTML=`<div class=card>
+  let obras=db.works.map(w=>`<option value="${esc(w)}">${esc(w)}</option>`).join('');
+  let categorias=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+  $('#content').innerHTML=`
+  <div class=card>
     <div class=cardhead>
       <h2>Informe individual</h2>
     </div>
+
     ${db.incidents.length?`
       <div class=formgrid>
         <div class="field span2">
@@ -100,11 +105,34 @@ function informes(){
           <select id=reportIncident>${opciones}</select>
         </div>
       </div>
+
       <div class=toolbar style="margin-top:15px">
         <button class="btn primary" onclick="reportPDF($('#reportIncident').value)">Generar PDF</button>
         <button class="btn ghost" onclick="reportWord($('#reportIncident').value)">Generar Word</button>
       </div>
-    `:'<div class=empty>No hay incidencias disponibles para generar informes.</div>'}
+    `:`<div class=empty>No hay incidencias disponibles para generar informes.</div>`}
+  </div>
+
+  <div class=card>
+    <div class=cardhead>
+      <h2>Informe por categoría</h2>
+    </div>
+
+    <div class=formgrid>
+      <div class=field>
+        <label>Obra</label>
+        <select id=reportWork>${obras}</select>
+      </div>
+
+      <div class=field>
+        <label>Categoría</label>
+        <select id=reportCategory>${categorias}</select>
+      </div>
+    </div>
+
+    <div class=toolbar style="margin-top:15px">
+      <button class="btn primary" disabled>Generar PDF</button>
+    </div>
   </div>`;
 }
 async function reportPDF(id){
