@@ -137,7 +137,12 @@ function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card
     return;
   }
 
-  alert(`Incidencia seleccionada: ${incident.no} - ${incident.title}`);
+    if(!p.url){
+    alert('Este plano todavía no tiene un archivo PDF guardado en la nube.');
+    return;
+  }
+
+  window.open(p.url,'_blank');
 }
 function actas(){let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.work)}</b><br>${esc(m.title)}</td><td>${m.date}</td><td>${m.incidents.length}</td><td>${esc(m.author)}</td></tr>`).join('');$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas.</div>'}</div>`}function createMinute(){if(!db.works.length)return alert('Primero crea una obra.');let w=prompt('Obra:',db.works[0]);if(!db.works.includes(w))return;let avail=db.incidents.filter(i=>i.work===w);if(!avail.length)return alert('No hay incidencias en esta obra.');let nums=prompt('Números a incluir separados por coma:',avail.map(i=>i.no).join(','));if(!nums)return;let sel=nums.split(',').map(x=>x.trim()),ids=avail.filter(i=>sel.includes(i.no)).map(i=>i.id),title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra';db.minutes.push({id:uid(),no:String(db.minutes.filter(m=>m.work===w).length+1).padStart(3,'0'),work:w,title,date:new Date().toISOString().slice(0,10),incidents:ids,author:db.user});save();actas()}
 function listados(){$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Listado general</h2><div class=toolbar><button class="btn primary" onclick=exportXLSX()>Exportar Excel</button><button class="btn ghost" onclick=window.print()>Imprimir</button></div></div>${incidentTable(db.incidents)}</div>`}function exportXLSX(){let rows=db.incidents.map(i=>({'Nº':i.no,'Obra':i.work,'Título':i.title,'Categoría':i.category,'Zona':i.zone,'Ubicación':i.location,'Responsable':i.responsible,'Estado':i.status,'Prioridad':i.priority,'Fecha':i.date,'Actualizada':i.updated,'Realizado por':i.author}));if(window.XLSX){let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Incidencias');XLSX.writeFile(wb,'PERLENTAUCHER_Incidencias.xlsx')}else exportCSV(rows)}function exportCSV(rows){let h=Object.keys(rows[0]||{'Nº':''}),csv='\ufeff'+[h,...rows.map(Object.values)].map(r=>r.map(v=>'"'+String(v||'').replaceAll('"','""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='PERLENTAUCHER_Incidencias.csv';a.click()}
