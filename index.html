@@ -107,7 +107,163 @@ function informes(){
     `:'<div class=empty>No hay incidencias disponibles para generar informes.</div>'}
   </div>`;
 }
-function config(){$('#content').innerHTML=`<div class=card><h2>Usuario actual</h2><div class=toolbar><input id=uname value="${esc(db.user)}"><button class="btn primary" onclick="db.user=$('#uname').value.trim()||'Usuario';save();render('config')">Guardar</button></div></div><div class=card><div class=cardhead><h2>Categorías</h2><div class=toolbar><input id=newCat placeholder="Nueva categoría"><button class="btn primary" onclick=addCat()>+ Añadir</button></div></div>${db.categories.length?db.categories.map(c=>`<span class=filechip>${esc(c)} <button onclick="delCat('${esc(c)}')" style="border:0;background:transparent">×</button></span>`).join(''):'<div class=empty>Las categorías comienzan vacías.</div>'}</div><div class=card><b>Sincronización multiusuario</b><p class=note>La aplicación está preparada como PWA de escritorio y móvil. Para sincronización real entre compañeros hace falta publicar esta carpeta en HTTPS y conectar un backend/base de datos común. Las credenciales del servicio no se incluyen en el paquete por seguridad.</p></div>`}function addCat(){let v=$('#newCat').value.trim();if(v&&!db.categories.includes(v)){db.categories.push(v);save();config()}}function delCat(c){if(db.incidents.some(i=>i.category===c))return alert('Categoría en uso.');db.categories=db.categories.filter(x=>x!==c);save();config()}
+async function reportPDF(id){
+  let i=db.incidents.find(x=>x.id===id);
+  let name=`${i.work} - ${i.title} - ${i.no}.pdf`;
+
+  if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');
+
+  let {jsPDF}=window.jspdf;
+  let d=new jsPDF({format:'a4'});
+  let g=[93,133,111];
+  let y=18;
+
+  function checkPage(needed=15){
+    if(y+needed>275){
+      d.addPage();
+      y=18;
+    }
+  }
+
+  function section(title){
+    checkPage(15);
+    d.setTextColor(...g);
+    d.setFont('helvetica','bold');
+    d.setFontSize(10);
+    d.text(title,20,y);
+    d.setTextColor(30);
+    y+=7;
+  }
+
+  function textBlock(text,size=10){
+    d.setFont('helvetica','normal');
+    d.setFontSize(size);
+    let lines=d.splitTextToSize(String(text||'—'),170);
+    checkPage(lines.length*5+5);
+    d.text(lines,20,y);
+    y+=lines.length*5+5;
+  }
+
+  async function addImage(url){
+    try{
+      let r=await fetch(url);
+      let blob=await r.blob();
+      let data=await new Promise((resolve,reject)=>{
+        let reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=reject;
+        reader.readAsDataURL(blob);
+      });
+
+      let img=await new Promise((resolve,reject)=>{
+        let el=new Image();
+        el.onload=()=>resolve(el);
+        el.onerror=reject;
+        el.src=data;
+      });
+
+      let maxW=170,maxH=105;
+      let ratio=Math.min(maxW/img.width,maxH/img.height);
+      let w=img.width*ratio,h=img.height*ratio;
+
+      checkPage(h+8);
+      d.addImage(data,'JPEG',20,y,w,h);
+      y+=h+8;
+    }catch(e){
+      console.error('No se pudo añadir imagen al PDF',e);
+      textBlock('Fotografía no disponible en el PDF.',8);
+    }
+  }
+
+  d.setTextColor(...g);
+  d.setFont('helvetica','bold');
+  d.setFontSize(18);
+  d.text('PERLENTAUCHER',20,y);
+  y+=7;
+  d.setFontSize(10);
+  d.text('INFORME DE INCIDENCIA',20,y);
+
+  y+=14;
+  d.setTextColor(30);
+  d.setFontSize(15);
+  d.text(`${i.work} - ${i.no}`,20,y);
+  y+=8;
+  d.setFontSize(12);
+  let titleLines=d.splitTextToSize(i.title,170);
+  d.text(titleLines,20,y);
+  y+=titleLines.length*6+8;
+
+  let datos=[
+    ['Categoría',i.category],
+    ['Zona',i.zone],
+    ['Ubicación',i.location],
+    ['Responsable',i.responsible],
+    ['Estado',i.status],
+    ['Prioridad',i.priority]
+  ];
+
+  datos.forEach((x,k)=>{
+    let col=k%3,row=Math.floor(k/3);
+    let yy=y+row*12;
+    d.setFont('helvetica','bold');
+    d.setFontSize(8);
+    d.text(x[0].toUpperCase(),20+col*58,yy);
+    d.setFont('helvetica','normal');
+    d.text(String(x[1]||'—'),20+col*58,yy+5);
+  });
+
+  y+=31;
+
+  section('DESCRIPCIÓN');
+  textBlock(i.description||'—');
+
+  let initialImages=(i.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+  if(initialImages.length){
+    section('FOTOGRAFÍAS');
+    for(let f of initialImages){
+      await addImage(f.url);
+    }
+  }
+
+  section('SEGUIMIENTO');
+
+  for(let h of (i.history||[])){
+    checkPage(18);
+    d.setFont('helvetica','bold');
+    d.setFontSize(9);
+    d.text(`${h.date||''} · ${h.author||''} · ${h.status||''}`,20,y);
+    y+=6;
+    textBlock(h.text||'',9);
+
+    let imgs=(h.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+    for(let f of imgs){
+      await addImage(f.url);
+    }
+
+    let docs=(h.files||[]).filter(f=>f.url&&!(f.type&&f.type.startsWith('image/')));
+    for(let f of docs){
+      checkPage(8);
+      d.setFont('helvetica','normal');
+      d.setFontSize(8);
+      d.text(`Documento adjunto: ${f.name}`,20,y);
+      y+=6;
+    }
+
+    y+=3;
+  }
+
+  let pages=d.getNumberOfPages();
+  for(let p=1;p<=pages;p++){
+    d.setPage(p);
+    d.setFont('helvetica','normal');
+    d.setFontSize(8);
+    d.setTextColor(70);
+    d.text(`Realizado por: ${i.author} · ${i.date}`,20,287);
+    d.text(`Página ${p} de ${pages}`,190,287,{align:'right'});
+  }
+
+  d.save(name);
+}
 function reportPDF(id){let i=db.incidents.find(x=>x.id===id),name=`${i.work} - ${i.title} - ${i.no}.pdf`;if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');let {jsPDF}=window.jspdf,d=new jsPDF({format:'a4'}),g=[93,133,111];d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(18);d.text('PERLENTAUCHER',20,18);d.setFontSize(10);d.text('INFORME DE INCIDENCIA',20,25);d.setTextColor(30);d.setFontSize(15);d.text(`${i.work} - ${i.no}`,20,39);d.setFontSize(12);d.text(d.splitTextToSize(i.title,170),20,47);d.setFontSize(8);let y=60;[['Categoría',i.category],['Zona',i.zone],['Ubicación',i.location],['Responsable',i.responsible],['Estado',i.status],['Prioridad',i.priority]].forEach((x,k)=>{let col=k%3,row=Math.floor(k/3);d.setFont('helvetica','bold');d.text(x[0].toUpperCase(),20+col*58,y+row*12);d.setFont('helvetica','normal');d.text(String(x[1]||'—'),20+col*58,y+5+row*12)});y=90;d.setFont('helvetica','bold');d.setFontSize(10);d.text('DESCRIPCIÓN',20,y);d.setFont('helvetica','normal');d.setFontSize(10);d.text(d.splitTextToSize(i.description||'',170),20,y+7);d.setFontSize(8);d.text(`Realizado por: ${i.author} · ${i.date}`,20,285);d.save(name)}
 function reportWord(id){let i=db.incidents.find(x=>x.id===id),name=`${i.work} - ${i.title} - ${i.no}.doc`,html=`<html><head><meta charset=utf-8><style>body{font-family:Arial;margin:40px}h1,h3{color:#5d856f}table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #ddd}</style></head><body><h1>PERLENTAUCHER</h1><h3>INFORME DE INCIDENCIA</h3><h2>${esc(i.work)} - ${i.no}<br>${esc(i.title)}</h2><table><tr><td>Categoría: ${esc(i.category||'—')}</td><td>Zona: ${esc(i.zone||'—')}</td><td>Ubicación: ${esc(i.location||'—')}</td></tr><tr><td>Responsable: ${esc(i.responsible||'—')}</td><td>Estado: ${esc(i.status)}</td><td>Prioridad: ${esc(i.priority)}</td></tr></table><h3>Descripción</h3><p>${esc(i.description||'')}</p><h3>Seguimiento</h3>${i.history.map(h=>`<p><b>${esc(h.date)} · ${esc(h.author)}</b><br>${esc(h.text)}</p>`).join('')}</body></html>`;let a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff',html],{type:'application/msword'}));a.download=name;a.click()}
 function closeModal(){$('#modal').classList.add('hidden')}if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});render();pullCloud(true);setInterval(()=>pullCloud(false),5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullCloud(false)});
