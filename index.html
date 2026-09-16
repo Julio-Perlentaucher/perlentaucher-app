@@ -472,7 +472,32 @@ if(minimumBlock<250){
     d.text('Descripción',20,y);
     y+=5;
 
-    textBlock(i.description||'—',9);
+    textBlock(i.description||'—',9);    if((i.history||[]).length){
+      checkPage(15);
+
+      d.setFont('helvetica','bold');
+      d.setFontSize(8);
+      d.setTextColor(...g);
+      d.text('SEGUIMIENTO',20,y);
+      y+=7;
+
+      for(let h of (i.history||[])){
+        let lines=d.splitTextToSize(String(h.text||'—'),170);
+        checkPage(14+(lines.length*5));
+
+        d.setDrawColor(225);
+        d.line(20,y,190,y);
+        y+=5;
+
+        d.setFont('helvetica','bold');
+        d.setFontSize(8);
+        d.setTextColor(30);
+        d.text(`${h.date||''} · ${h.author||''} · ${h.status||''}`,20,y);
+        y+=5;
+
+        textBlock(h.text||'—',8);
+      }
+    }
     y+=4;
   }
 
