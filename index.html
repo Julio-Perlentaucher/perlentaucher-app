@@ -269,7 +269,15 @@ async function addImages(files){
     let docs=(h.files||[]).filter(f=>f.url&&!(f.type&&f.type.startsWith('image/')));
 
     let textLines=d.splitTextToSize(String(h.text||'—'),170);
-    let minimumBlock=12+(textLines.length*5);
+    let imageSpace=0;
+
+if(imgs.length===1){
+  imageSpace=128;
+}else if(imgs.length>1){
+  imageSpace=Math.ceil(imgs.length/2)*83;
+}
+
+let minimumBlock=18+(textLines.length*5)+imageSpace+(docs.length*6);
 
     checkPage(minimumBlock);
 
