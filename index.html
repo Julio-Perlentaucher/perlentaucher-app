@@ -107,73 +107,76 @@ function informes(){
     `:'<div class=empty>No hay incidencias disponibles para generar informes.</div>'}
   </div>`;
 }
-async function reportPDF(id){
-  let i=db.incidents.find(x=>x.id===id);
-  let name=`${i.work} - ${i.title} - ${i.no}.pdf`;
+async function loadImage(url){
+  try{
+    let r=await fetch(url);
+    let blob=await r.blob();
 
-  if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');
+    let data=await new Promise((resolve,reject)=>{
+      let reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=reject;
+      reader.readAsDataURL(blob);
+    });
 
-  let {jsPDF}=window.jspdf;
-  let d=new jsPDF({format:'a4'});
-  let g=[93,133,111];
-  let y=18;
+    let img=await new Promise((resolve,reject)=>{
+      let el=new Image();
+      el.onload=()=>resolve(el);
+      el.onerror=reject;
+      el.src=data;
+    });
 
-  function checkPage(needed=15){
-    if(y+needed>275){
-      d.addPage();
-      y=18;
-    }
+    return {data,img};
+  }catch(e){
+    console.error('No se pudo cargar imagen para el PDF',e);
+    return null;
+  }
+}
+
+async function addImages(files){
+  let loaded=[];
+
+  for(let f of files){
+    let image=await loadImage(f.url);
+    if(image)loaded.push(image);
   }
 
-  function section(title){
-    checkPage(15);
-    d.setTextColor(...g);
-    d.setFont('helvetica','bold');
-    d.setFontSize(10);
-    d.text(title,20,y);
-    d.setTextColor(30);
-    y+=7;
+  if(!loaded.length)return;
+
+  if(loaded.length===1){
+    let {data,img}=loaded[0];
+    let maxW=170,maxH=120;
+    let ratio=Math.min(maxW/img.width,maxH/img.height);
+    let w=img.width*ratio,h=img.height*ratio;
+
+    checkPage(h+8);
+    d.addImage(data,'JPEG',20,y,w,h);
+    y+=h+8;
+    return;
   }
 
-  function textBlock(text,size=10){
-    d.setFont('helvetica','normal');
-    d.setFontSize(size);
-    let lines=d.splitTextToSize(String(text||'—'),170);
-    checkPage(lines.length*5+5);
-    d.text(lines,20,y);
-    y+=lines.length*5+5;
+  let colW=82;
+  let gap=6;
+
+  for(let n=0;n<loaded.length;n+=2){
+    let pair=loaded.slice(n,n+2);
+    let dimensions=pair.map(({img})=>{
+      let ratio=Math.min(colW/img.width,75/img.height);
+      return {w:img.width*ratio,h:img.height*ratio};
+    });
+
+    let rowH=Math.max(...dimensions.map(x=>x.h));
+    checkPage(rowH+8);
+
+    pair.forEach(({data},j)=>{
+      let dim=dimensions[j];
+      let x=20+j*(colW+gap);
+      d.addImage(data,'JPEG',x,y,dim.w,dim.h);
+    });
+
+    y+=rowH+8;
   }
-
-  async function addImage(url){
-    try{
-      let r=await fetch(url);
-      let blob=await r.blob();
-      let data=await new Promise((resolve,reject)=>{
-        let reader=new FileReader();
-        reader.onload=()=>resolve(reader.result);
-        reader.onerror=reject;
-        reader.readAsDataURL(blob);
-      });
-
-      let img=await new Promise((resolve,reject)=>{
-        let el=new Image();
-        el.onload=()=>resolve(el);
-        el.onerror=reject;
-        el.src=data;
-      });
-
-      let maxW=170,maxH=105;
-      let ratio=Math.min(maxW/img.width,maxH/img.height);
-      let w=img.width*ratio,h=img.height*ratio;
-
-      checkPage(h+8);
-      d.addImage(data,'JPEG',20,y,w,h);
-      y+=h+8;
-    }catch(e){
-      console.error('No se pudo añadir imagen al PDF',e);
-      textBlock('Fotografía no disponible en el PDF.',8);
-    }
-  }
+}
 
   d.setTextColor(...g);
   d.setFont('helvetica','bold');
@@ -220,9 +223,7 @@ async function reportPDF(id){
   let initialImages=(i.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
   if(initialImages.length){
     section('FOTOGRAFÍAS');
-    for(let f of initialImages){
-      await addImage(f.url);
-    }
+    await addImages(initialImages);
   }
 
   section('SEGUIMIENTO');
@@ -236,9 +237,7 @@ async function reportPDF(id){
     textBlock(h.text||'',9);
 
     let imgs=(h.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
-    for(let f of imgs){
-      await addImage(f.url);
-    }
+    await addImages(imgs);
 
     let docs=(h.files||[]).filter(f=>f.url&&!(f.type&&f.type.startsWith('image/')));
     for(let f of docs){
