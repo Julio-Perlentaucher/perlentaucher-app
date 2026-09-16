@@ -279,7 +279,11 @@ if(imgs.length===1){
 
 let minimumBlock=18+(textLines.length*5)+imageSpace+(docs.length*6);
 
-    checkPage(minimumBlock);
+if(minimumBlock<250){
+  checkPage(minimumBlock);
+}else{
+  checkPage(25);
+}
 
     d.setDrawColor(220);
     d.line(20,y,190,y);
@@ -289,7 +293,7 @@ let minimumBlock=18+(textLines.length*5)+imageSpace+(docs.length*6);
     d.setFontSize(9);
     d.setTextColor(30);
     d.text(`${h.date||''} · ${h.author||''} · ${h.status||''}`,20,y);
-   y+=3;
+   y+=6;
 
     textBlock(h.text||'',9);
 
