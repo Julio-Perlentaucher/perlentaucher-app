@@ -35,6 +35,29 @@ async function pushCloud(){if(syncBusy)return;syncBusy=true;try{localSave();let 
     url:SUPABASE_URL+'/storage/v1/object/public/archivos-obra/'+path
   };
 }
+async function uploadPlanStorage(file){
+  const safeName=Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const path='planos/'+safeName;
+
+  const r=await fetch(SUPABASE_URL+'/storage/v1/object/archivos-obra/'+path,{
+    method:'POST',
+    headers:{
+      'apikey':SUPABASE_KEY,
+      'Authorization':'Bearer '+SUPABASE_KEY,
+      'Content-Type':file.type||'application/pdf'
+    },
+    body:file
+  });
+
+  if(!r.ok)throw new Error(await r.text());
+
+  return {
+    name:file.name,
+    type:file.type,
+    size:file.size,
+    url:SUPABASE_URL+'/storage/v1/object/public/archivos-obra/'+path
+  };
+}  
 function save(){localSave();pushCloud();}
 async function pullCloud(first=false){if(syncBusy)return;try{let r=await fetch(SUPABASE_URL+'/rest/v1/app_state?id=eq.1&select=data,updated_at',{headers:apiHeaders,cache:'no-store'});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length){if(first)await pushCloud();return;}let remote=rows[0].data||seed,rs=JSON.stringify(remote);if(rs!==lastRemote&&rs!==JSON.stringify(db)){db=remote;localSave();lastRemote=rs;setSync('Sincronizado');render(currentView);}else{lastRemote=rs;setSync('Sincronizado');}}catch(e){console.error(e);setSync('Sin conexión');}}
 let currentView='dashboard';
@@ -110,7 +133,39 @@ function editIncident(id){
   save();
   showIncident(id);
 }
-function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2><select id=pw onchange=renderPlans()>${worksOpts()}</select></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seguir la ruta y seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(w){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}function addPlanFiles(fs){let w=$('#pw').value;fs.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf')).forEach(f=>db.plans.push({id:uid(),work:w,name:f.name,rev:'01',date:new Date().toISOString().slice(0,10),size:f.size}));save();renderPlans()}function renderPlans(){let w=$('#pw').value,a=db.plans.filter(p=>p.work===w);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}function updatePlan(id){let p=db.plans.find(x=>x.id===id),r=prompt('Nueva revisión:',p.rev);if(r){p.rev=r;p.date=new Date().toISOString().slice(0,10);save();renderPlans()}}function delPlan(id){if(confirm('¿Quitar plano?')){db.plans=db.plans.filter(x=>x.id!==id);save();renderPlans()}}function markPlan(id){
+function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2><select id=pw onchange=renderPlans()>${worksOpts()}</select></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seguir la ruta y seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(w){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}async function addPlanFiles(fs){
+  let w=$('#pw').value;
+  let pdfs=fs.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
+
+  if(!pdfs.length)return;
+
+  try{
+    setSync('Subiendo planos...');
+
+    for(const file of pdfs){
+      let stored=await uploadPlanStorage(file);
+
+      db.plans.push({
+        id:uid(),
+        work:w,
+        name:stored.name,
+        rev:'01',
+        date:new Date().toISOString().slice(0,10),
+        size:stored.size,
+        type:stored.type,
+        url:stored.url
+      });
+    }
+
+    save();
+    renderPlans();
+
+  }catch(e){
+    console.error(e);
+    setSync('Error al subir plano');
+    alert('No se pudo subir el plano.');
+  }
+}function renderPlans(){let w=$('#pw').value,a=db.plans.filter(p=>p.work===w);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}function updatePlan(id){let p=db.plans.find(x=>x.id===id),r=prompt('Nueva revisión:',p.rev);if(r){p.rev=r;p.date=new Date().toISOString().slice(0,10);save();renderPlans()}}function delPlan(id){if(confirm('¿Quitar plano?')){db.plans=db.plans.filter(x=>x.id!==id);save();renderPlans()}}function markPlan(id){
   let p=db.plans.find(x=>x.id===id);
   if(!p)return;
 
