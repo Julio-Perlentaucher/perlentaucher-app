@@ -228,9 +228,11 @@ function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card
   <button class="btn ghost" id="zoomInPlan">+ Zoom</button>
 </div>
 
-      <div class="annotWrap">
-        <canvas id="planCanvas"></canvas>
-      </div>
+      <div class="annotWrap" id="planAnnotWrap" style="position:relative">
+  <canvas id="planCanvas" style="display:block"></canvas>
+  <div id="planMarker"
+       style="display:none;position:absolute;width:26px;height:26px;border:4px solid #d32f2f;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none"></div>
+</div>
     </div>
   `;
 
@@ -279,6 +281,20 @@ $('#zoomInPlan').onclick=async()=>{
   planScale+=0.25;
   $('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
   await renderPage();
+};
+const wrap=$('#planAnnotWrap');
+const canvas=$('#planCanvas');
+const marker=$('#planMarker');
+
+canvas.onclick=(e)=>{
+  const rect=canvas.getBoundingClientRect();
+
+  const x=e.clientX-rect.left;
+  const y=e.clientY-rect.top;
+
+  marker.style.left=(canvas.offsetLeft+x)+'px';
+  marker.style.top=(canvas.offsetTop+y)+'px';
+  marker.style.display='block';
 };
     await renderPage();
 
