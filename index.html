@@ -219,10 +219,14 @@ function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card
       </div>
 
       <div class="toolbar" style="margin:12px 0">
-        <button class="btn ghost" id="prevPlanPage">← Página</button>
-        <span id="planPageInfo">Cargando...</span>
-        <button class="btn ghost" id="nextPlanPage">Página →</button>
-      </div>
+  <button class="btn ghost" id="prevPlanPage">← Página</button>
+  <span id="planPageInfo">Cargando...</span>
+  <button class="btn ghost" id="nextPlanPage">Página →</button>
+
+  <button class="btn ghost" id="zoomOutPlan">− Zoom</button>
+  <span id="planZoomInfo">125%</span>
+  <button class="btn ghost" id="zoomInPlan">+ Zoom</button>
+</div>
 
       <div class="annotWrap">
         <canvas id="planCanvas"></canvas>
@@ -233,10 +237,10 @@ function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card
   try{
     const pdf=await pdfjsLib.getDocument(p.url).promise;
     let pageNo=1;
-
+    let planScale=1.25;
     async function renderPage(){
       const page=await pdf.getPage(pageNo);
-      const viewport=page.getViewport({scale:1.25});
+      const viewport=page.getViewport({scale:planScale});
       const canvas=$('#planCanvas');
       const ctx=canvas.getContext('2d');
 
@@ -263,7 +267,19 @@ function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card
       pageNo++;
       await renderPage();
     };
+$('#zoomOutPlan').onclick=async()=>{
+  if(planScale<=0.5)return;
+  planScale-=0.25;
+  $('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
+  await renderPage();
+};
 
+$('#zoomInPlan').onclick=async()=>{
+  if(planScale>=3)return;
+  planScale+=0.25;
+  $('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
+  await renderPage();
+};
     await renderPage();
 
   }catch(e){
