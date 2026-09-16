@@ -157,7 +157,7 @@ function informes(){
     </div>
 
     <div class=toolbar style="margin-top:15px">
-      <button class="btn primary" disabled>Generar PDF</button>
+      <button class="btn primary" onclick="reportCategoryPDF($('#reportWork').value,$('#reportCategory').value)">Generar PDF</button>
     </div>
   </div>`;
 }
@@ -379,6 +379,117 @@ if(minimumBlock<250){
 
   d.save(name);
 }
+ async function reportCategoryPDF(work,category){
+  let incidents=db.incidents.filter(i=>i.work===work&&i.category===category);
+
+  if(!incidents.length){
+    alert('No hay incidencias de esta categoría en la obra seleccionada.');
+    return;
+  }
+
+  if(!window.jspdf){
+    alert('Para generar PDF se necesita conexión en la primera carga.');
+    return;
+  }
+
+  let {jsPDF}=window.jspdf;
+  let d=new jsPDF({format:'a4'});
+  let g=[93,133,111];
+  let y=18;
+
+  function checkPage(needed=15){
+    if(y+needed>275){
+      d.addPage();
+      y=18;
+    }
+  }
+
+  function textBlock(text,size=9){
+    d.setFont('helvetica','normal');
+    d.setFontSize(size);
+    let lines=d.splitTextToSize(String(text||'—'),170);
+    checkPage(lines.length*5+5);
+    d.text(lines,20,y);
+    y+=lines.length*5+5;
+  }
+
+  d.setTextColor(...g);
+  d.setFont('helvetica','bold');
+  d.setFontSize(18);
+  d.text('PERLENTAUCHER',20,y);
+
+  y+=7;
+  d.setFontSize(10);
+  d.text('INFORME POR CATEGORÍA',20,y);
+
+  y+=14;
+  d.setTextColor(30);
+  d.setFontSize(15);
+  d.text(work,20,y);
+
+  y+=8;
+  d.setFontSize(12);
+  d.text(`Categoría: ${category}`,20,y);
+
+  y+=12;
+  d.setFontSize(9);
+  d.setFont('helvetica','normal');
+  d.text(`Total de incidencias: ${incidents.length}`,20,y);
+
+  y+=12;
+
+  for(let i of incidents){
+    checkPage(45);
+
+    d.setDrawColor(210);
+    d.line(20,y,190,y);
+    y+=7;
+
+    d.setTextColor(...g);
+    d.setFont('helvetica','bold');
+    d.setFontSize(11);
+    d.text(`${i.no} · ${i.title}`,20,y);
+
+    y+=6;
+    d.setTextColor(30);
+    d.setFontSize(8);
+    d.setFont('helvetica','normal');
+    d.text(
+      `Estado: ${i.status} · Prioridad: ${i.priority} · Responsable: ${i.responsible||'—'}`,
+      20,
+      y
+    );
+
+    y+=6;
+    d.text(
+      `Zona: ${i.zone||'—'} · Ubicación: ${i.location||'—'} · Actualizada: ${i.updated||i.date}`,
+      20,
+      y
+    );
+
+    y+=8;
+    d.setFont('helvetica','bold');
+    d.text('Descripción',20,y);
+    y+=5;
+
+    textBlock(i.description||'—',9);
+    y+=4;
+  }
+
+  let pages=d.getNumberOfPages();
+
+  for(let p=1;p<=pages;p++){
+    d.setPage(p);
+    d.setFont('helvetica','normal');
+    d.setFontSize(8);
+    d.setTextColor(70);
+    d.text(`Generado por: ${db.user}`,20,287);
+    d.text(`Página ${p} de ${pages}`,190,287,{align:'right'});
+  }
+
+  let name=`${work} - ${category} - Informe por categoria.pdf`;
+  d.save(name);
+} 
 function config(){
   $('#content').innerHTML=`<div class=card><h2>Usuario actual</h2><div class=toolbar><input id=uname value="${esc(db.user)}"><button class="btn primary" onclick="db.user=$('#uname').value.trim()||'Usuario';save();render('config')">Guardar</button></div></div><div class=card><div class=cardhead><h2>Categorías</h2><div class=toolbar><input id=newCat placeholder="Nueva categoría"><button class="btn primary" onclick=addCat()>+ Añadir</button></div></div>${db.categories.length?db.categories.map(c=>`<span class=filechip>${esc(c)} <button onclick="delCat('${esc(c)}')" style="border:0;background:transparent">×</button></span>`).join(''):'<div class=empty>Las categorías comienzan vacías.</div>'}</div><div class=card><b>Sincronización multiusuario</b><p class=note>La aplicación está preparada como PWA de escritorio y móvil. Para sincronización real entre compañeros hace falta publicar esta carpeta en HTTPS y conectar un backend/base de datos común. Las credenciales del servicio no se incluyen en el paquete por seguridad.</p></div>`;
 }
