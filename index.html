@@ -15,6 +15,26 @@ let syncBusy=false,lastRemote='';
 const apiHeaders={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'};
 function localSave(){localStorage.setItem(KEY,JSON.stringify(db));}
 async function pushCloud(){if(syncBusy)return;syncBusy=true;try{localSave();let body=JSON.stringify({id:1,data:db,updated_at:new Date().toISOString()});let r=await fetch(SUPABASE_URL+'/rest/v1/app_state?on_conflict=id',{method:'POST',headers:{...apiHeaders,'Prefer':'resolution=merge-duplicates,return=minimal'},body});if(!r.ok)throw new Error(await r.text());lastRemote=JSON.stringify(db);setSync('Sincronizado');}catch(e){console.error(e);setSync('Sin conexión');}finally{syncBusy=false;}}
+  async function uploadStorage(file){
+  const safeName=Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+  const path='seguimientos/'+safeName;
+  const r=await fetch(SUPABASE_URL+'/storage/v1/object/archivos-obra/'+path,{
+    method:'POST',
+    headers:{
+      'apikey':SUPABASE_KEY,
+      'Authorization':'Bearer '+SUPABASE_KEY,
+      'Content-Type':file.type||'application/octet-stream'
+    },
+    body:file
+  });
+  if(!r.ok)throw new Error(await r.text());
+  return {
+    name:file.name,
+    type:file.type,
+    size:file.size,
+    url:SUPABASE_URL+'/storage/v1/object/public/archivos-obra/'+path
+  };
+}
 function save(){localSave();pushCloud();}
 async function pullCloud(first=false){if(syncBusy)return;try{let r=await fetch(SUPABASE_URL+'/rest/v1/app_state?id=eq.1&select=data,updated_at',{headers:apiHeaders,cache:'no-store'});if(!r.ok)throw new Error(await r.text());let rows=await r.json();if(!rows.length){if(first)await pushCloud();return;}let remote=rows[0].data||seed,rs=JSON.stringify(remote);if(rs!==lastRemote&&rs!==JSON.stringify(db)){db=remote;localSave();lastRemote=rs;setSync('Sincronizado');render(currentView);}else{lastRemote=rs;setSync('Sincronizado');}}catch(e){console.error(e);setSync('Sin conexión');}}
 let currentView='dashboard';
@@ -30,7 +50,39 @@ let pendingFiles=[];function openIncident(work=''){if(!db.works.length)return al
 function wireDrop(dropId,inputId,cb){let d=$('#'+dropId),i=$('#'+inputId);d.onclick=()=>i.click();i.onchange=()=>cb([...i.files]);['dragenter','dragover'].forEach(e=>d.addEventListener(e,x=>{x.preventDefault();d.classList.add('drag')}));['dragleave','drop'].forEach(e=>d.addEventListener(e,x=>{x.preventDefault();d.classList.remove('drag')}));d.addEventListener('drop',e=>cb([...e.dataTransfer.files]))}
 function saveIncident(){let w=$('#iw').value,t=$('#it').value.trim();if(!t)return alert('Escribe un título.');let d=$('#idate').value,i={id:uid(),no:nextNo(w),work:w,title:t,date:d,updated:d,category:$('#ic').value,zone:$('#iz').value,location:$('#il').value,responsible:$('#ir').value,status:$('#is').value,priority:$('#ip').value,description:$('#ides').value,author:db.user,files:pendingFiles,planCapture:null,history:[{date:d,author:db.user,text:'Incidencia creada',status:$('#is').value,files:[]}]};db.incidents.push(i);save();closeModal();render('incidencias')}
 function showIncident(id){let i=db.incidents.find(x=>x.id===id);$('#modal').classList.remove('hidden');$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><div><h2>${esc(i.work)} - ${i.no}</h2><div class=note>${esc(i.title)}</div></div><button class=x onclick=closeModal()>×</button></div><div class=toolbar style="margin:12px 0"><button class="btn primary" onclick="followUp('${id}')">+ Añadir seguimiento</button><button class="btn ghost" onclick="editIncident('${id}')">Editar datos</button><button class="btn ghost" onclick="reportPDF('${id}')">PDF</button><button class="btn ghost" onclick="reportWord('${id}')">Word</button></div><div class=grid style="grid-template-columns:repeat(3,1fr)"><div class=stat><span>Estado</span><b style="font-size:16px">${esc(i.status)}</b></div><div class=stat><span>Categoría</span><b style="font-size:16px">${esc(i.category||'—')}</b></div><div class=stat><span>Responsable</span><b style="font-size:16px">${esc(i.responsible||'—')}</b></div></div><div class=card><b>Descripción</b><p>${esc(i.description||'—')}</p><div class=note>Zona: ${esc(i.zone||'—')} · Ubicación: ${esc(i.location||'—')} · Realizado por: ${esc(i.author)}</div>${i.files?.length?`<div class=files>${i.files.map(f=>`<span class=filechip>${esc(f.name)}</span>`).join('')}</div>`:''}</div><div class=card><div class=cardhead><h2>Historial</h2></div><div class=timeline>${i.history.slice().reverse().map(h=>`<div class=event><b>${esc(h.text)}</b><br><small>${esc(h.date)} · ${esc(h.author)} · ${esc(h.status||'')}</small>${h.files?.length?`<div class=files>${h.files.map(f=>`<span class=filechip>${esc(f.name)}</span>`).join('')}</div>`:''}</div>`).join('')}</div></div></div>`}
-function followUp(id){let i=db.incidents.find(x=>x.id===id);$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><h2>Seguimiento - ${i.no}</h2><button class=x onclick="showIncident('${id}')">×</button></div><div class=formgrid><div class=field><label>Fecha</label><input id=fdate type=date value="${new Date().toISOString().slice(0,10)}"></div><div class=field><label>Estado</label><select id=fstatus><option>Pendiente</option><option>En proceso</option><option>Solucionada</option><option>Cerrada</option></select></div><div class="field span3"><label>Comentario</label><textarea id=ftext rows=6></textarea></div><div class="field span3"><label>Nuevas fotos/documentos</label><div class=drop id=followDrop>Arrastra y suelta o pulsa para elegir archivos<input id=followFiles type=file multiple accept="image/*,.pdf" hidden></div><div id=followNames class=files></div></div></div><div class=toolbar style="justify-content:flex-end;margin-top:15px"><button class="btn primary" onclick="saveFollow('${id}')">Guardar seguimiento</button></div></div>`;$('#fstatus').value=i.status;window.followPending=[];wireDrop('followDrop','followFiles',fs=>{followPending=[...followPending,...fs].map(f=>({name:f.name,type:f.type,size:f.size}));$('#followNames').innerHTML=followPending.map(f=>`<span class=filechip>${esc(f.name)}</span>`).join('')})}function saveFollow(id){let i=db.incidents.find(x=>x.id===id),d=$('#fdate').value,t=$('#ftext').value.trim();if(!t)return alert('Añade un comentario.');i.status=$('#fstatus').value;i.updated=d;i.history.push({date:d,author:db.user,text:t,status:i.status,files:followPending});save();showIncident(id)}
+function followUp(id){let i=db.incidents.find(x=>x.id===id);$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><h2>Seguimiento - ${i.no}</h2><button class=x onclick="showIncident('${id}')">×</button></div><div class=formgrid><div class=field><label>Fecha</label><input id=fdate type=date value="${new Date().toISOString().slice(0,10)}"></div><div class=field><label>Estado</label><select id=fstatus><option>Pendiente</option><option>En proceso</option><option>Solucionada</option><option>Cerrada</option></select></div><div class="field span3"><label>Comentario</label><textarea id=ftext rows=6></textarea></div><div class="field span3"><label>Nuevas fotos/documentos</label><div class=drop id=followDrop>Arrastra y suelta o pulsa para elegir archivos<input id=followFiles type=file multiple accept="image/*,.pdf" hidden></div><div id=followNames class=files></div></div></div><div class=toolbar style="justify-content:flex-end;margin-top:15px"><button class="btn primary" onclick="saveFollow('${id}')">Guardar seguimiento</button></div></div>`;$('#fstatus').value=i.status;window.followPending=[];wireDrop('followDrop','followFiles',fs=>{followPending=[...followPending,...fs];$('#followNames').innerHTML=followPending.map(f=>`<span class=filechip>${esc(f.name)}</span>`).join('')})}async function saveFollow(id){
+  let i=db.incidents.find(x=>x.id===id),
+      d=$('#fdate').value,
+      t=$('#ftext').value.trim();
+
+  if(!t)return alert('Añade un comentario.');
+
+  try{
+    setSync('Subiendo archivos...');
+
+    const files=[];
+    for(const file of followPending){
+      files.push(await uploadStorage(file));
+    }
+
+    i.status=$('#fstatus').value;
+    i.updated=d;
+    i.history.push({
+      date:d,
+      author:db.user,
+      text:t,
+      status:i.status,
+      files:files
+    });
+
+    save();
+    showIncident(id);
+  }catch(e){
+    console.error(e);
+    setSync('Error al subir archivo');
+    alert('No se pudo subir la foto o documento.');
+  }
+}
 function editIncident(id){let i=db.incidents.find(x=>x.id===id),t=prompt('Título:',i.title);if(t!==null)i.title=t.trim()||i.title;let r=prompt('Responsable:',i.responsible||'');if(r!==null)i.responsible=r;save();showIncident(id)}
 function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2><select id=pw onchange=renderPlans()>${worksOpts()}</select></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seguir la ruta y seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(w){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}function addPlanFiles(fs){let w=$('#pw').value;fs.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf')).forEach(f=>db.plans.push({id:uid(),work:w,name:f.name,rev:'01',date:new Date().toISOString().slice(0,10),size:f.size}));save();renderPlans()}function renderPlans(){let w=$('#pw').value,a=db.plans.filter(p=>p.work===w);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}function updatePlan(id){let p=db.plans.find(x=>x.id===id),r=prompt('Nueva revisión:',p.rev);if(r){p.rev=r;p.date=new Date().toISOString().slice(0,10);save();renderPlans()}}function delPlan(id){if(confirm('¿Quitar plano?')){db.plans=db.plans.filter(x=>x.id!==id);save();renderPlans()}}function markPlan(id){alert('Flujo de localización: seleccionar plano → abrir página → zoom/desplazar → fijar vista → marcar con dedo/ratón → guardar captura en la incidencia. La interfaz queda reservada para el visor PDF del despliegue conectado.');}
 function actas(){let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.work)}</b><br>${esc(m.title)}</td><td>${m.date}</td><td>${m.incidents.length}</td><td>${esc(m.author)}</td></tr>`).join('');$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas.</div>'}</div>`}function createMinute(){if(!db.works.length)return alert('Primero crea una obra.');let w=prompt('Obra:',db.works[0]);if(!db.works.includes(w))return;let avail=db.incidents.filter(i=>i.work===w);if(!avail.length)return alert('No hay incidencias en esta obra.');let nums=prompt('Números a incluir separados por coma:',avail.map(i=>i.no).join(','));if(!nums)return;let sel=nums.split(',').map(x=>x.trim()),ids=avail.filter(i=>sel.includes(i.no)).map(i=>i.id),title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra';db.minutes.push({id:uid(),no:String(db.minutes.filter(m=>m.work===w).length+1).padStart(3,'0'),work:w,title,date:new Date().toISOString().slice(0,10),incidents:ids,author:db.user});save();actas()}
