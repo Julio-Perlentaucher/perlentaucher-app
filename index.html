@@ -66,14 +66,14 @@ function setSync(t){let el=document.getElementById('syncState');if(el)el.textCon
 const $=s=>document.querySelector(s);const esc=s=>(s??'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));const uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now()+Math.random();
 const navs=[['dashboard','▦','Resumen'],['obras','⌂','Obras'],['incidencias','⚠','Incidencias'],['planos','▱','Planos'],['actas','☷','Actas'],['listados','⇩','Listados'],['informes','▤','Informes'],['config','⚙','Config.']];$('#nav').innerHTML=navs.map((n,i)=>`<button data-view="${n[0]}" class="${i?'':'active'}">${n[1]} &nbsp;<span>${n[2]}</span></button>`).join('');$('#mobilebar').innerHTML=navs.slice(0,5).map(n=>`<button data-view="${n[0]}"><b>${n[1]}</b>${n[2]}</button>`).join('');document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>render(b.dataset.view));
 const titles={dashboard:['Resumen','Control general de obras e incidencias'],obras:['Obras','Crea y administra las obras'],incidencias:['Incidencias','Seguimiento, documentación y trazabilidad'],planos:['Planos','Biblioteca de planos asociada a cada obra'],actas:['Actas','Agrupa incidencias en actas de obra'],listados:['Listados y exportación','Filtra y exporta a Excel'],informes:['Informes','Genera informes de obra e incidencias'],config:['Configuración','Usuario y categorías']};function render(v='dashboard'){currentView=v;document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===v));$('#viewTitle').textContent=titles[v][0];$('#viewSub').textContent=titles[v][1];$('#userChip').textContent='Usuario: '+db.user;({dashboard,obras,incidencias,planos,actas,listados,informes,config}[v])()}
-const worksOpts=()=>db.works.map(w=>`<option>${esc(w)}</option>`).join(''),catsOpts=()=>db.categories.map(c=>`<option>${esc(c)}</option>`).join('');function nextNo(w){db.numberCounters=db.numberCounters||{};let max=Math.max(0,...db.incidents.filter(i=>i.work===w).map(i=>+i.no||0),+(db.numberCounters[w]||0));let n=max+1;db.numberCounters[w]=n;return String(n).padStart(3,'0')}function dashboard(){let s=x=>db.incidents.filter(i=>i.status===x).length;$('#content').innerHTML=`<div class=grid><div class=stat><b>${db.works.length}</b><span>Obras</span></div><div class=stat><b>${db.incidents.length}</b><span>Incidencias</span></div><div class=stat><b>${s('Pendiente')}</b><span>Pendientes</span></div><div class=stat><b>${s('En proceso')}</b><span>En proceso</span></div></div><div class=card><div class=cardhead><h2>Incidencias recientes</h2><button class="btn primary no-print" onclick="openIncident()">+ Nueva incidencia</button></div>${incidentTable(db.incidents.slice(-8).reverse())}</div>`}
+const worksOpts=()=>db.works.map(w=>`<option>${esc(w)}</option>`).join(''),catsOpts=()=>db.categories.map(c=>`<option>${esc(c)}</option>`).join('');function nextNo(w){return String(Math.max(0,...db.incidents.filter(i=>i.work===w).map(i=>+i.no||0))+1).padStart(3,'0')}function dashboard(){let s=x=>db.incidents.filter(i=>i.status===x).length;$('#content').innerHTML=`<div class=grid><div class=stat><b>${db.works.length}</b><span>Obras</span></div><div class=stat><b>${db.incidents.length}</b><span>Incidencias</span></div><div class=stat><b>${s('Pendiente')}</b><span>Pendientes</span></div><div class=stat><b>${s('En proceso')}</b><span>En proceso</span></div></div><div class=card><div class=cardhead><h2>Incidencias recientes</h2><button class="btn primary no-print" onclick="openIncident()">+ Nueva incidencia</button></div>${incidentTable(db.incidents.slice(-8).reverse())}</div>`}
 function obras(){let r=db.works.map(w=>`<tr><td><b>${esc(w)}</b></td><td>${db.incidents.filter(i=>i.work===w).length}</td><td>${db.plans.filter(p=>p.work===w).length}</td><td><button class="btn ghost" onclick="openIncident('${esc(w)}')">Nueva incidencia</button> <button class="btn danger" onclick="delWork('${esc(w)}')">Quitar</button></td></tr>`).join('');$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Obras</h2><div class=toolbar><input id=newWork placeholder="Nombre de la obra"><button class="btn primary" onclick=addWork()>+ Añadir</button></div></div>${r?`<table><thead><tr><th>Obra</th><th>Incidencias</th><th>Planos</th><th></th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay obras. La lista comienza vacía.</div>'}</div>`}function addWork(){let v=$('#newWork').value.trim();if(v&&!db.works.includes(v)){db.works.push(v);save();obras()}}function delWork(w){if(db.incidents.some(i=>i.work===w)||db.plans.some(p=>p.work===w))return alert('No se puede quitar: contiene incidencias o planos.');if(confirm('¿Quitar obra?')){db.works=db.works.filter(x=>x!==w);save();obras()}}
 function incidentTable(a){if(!a.length)return '<div class=empty>No hay incidencias.</div>';return `<table><thead><tr><th>Nº</th><th>Obra / título</th><th>Categoría</th><th>Zona</th><th>Estado</th><th>Prioridad</th><th>Actualizada</th></tr></thead><tbody>${a.map(i=>`<tr onclick="showIncident('${i.id}')" style="cursor:pointer"><td><b>${i.no}</b></td><td><b>${esc(i.work)}</b><br>${esc(i.title)}</td><td>${esc(i.category||'—')}</td><td>${esc(i.zone||'—')}</td><td><span class=pill>${esc(i.status)}</span></td><td>${esc(i.priority)}</td><td>${esc(i.updated||i.date)}</td></tr>`).join('')}</tbody></table>`}
 function incidencias(){let f=`<div class=toolbar><select id=fw onchange=filterInc()><option value="">Todas las obras</option>${worksOpts()}</select><select id=fc onchange=filterInc()><option value="">Todas las categorías</option>${catsOpts()}</select><select id=fs onchange=filterInc()><option value="">Todos los estados</option><option>Pendiente</option><option>En proceso</option><option>Solucionada</option><option>Cerrada</option></select><input id=fq oninput=filterInc() placeholder="Buscar..."></div>`;$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Incidencias</h2>${f}</div><div id=incTable>${incidentTable(db.incidents)}</div></div>`}function filterInc(){let w=$('#fw').value,c=$('#fc').value,s=$('#fs').value,q=$('#fq').value.toLowerCase();$('#incTable').innerHTML=incidentTable(db.incidents.filter(i=>(!w||i.work===w)&&(!c||i.category===c)&&(!s||i.status===s)&&(!q||JSON.stringify(i).toLowerCase().includes(q))))}
 let pendingFiles=[];function openIncident(work=''){if(!db.works.length)return alert('Primero añade una obra.');pendingFiles=[];$('#modal').classList.remove('hidden');$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><h2>Nueva incidencia</h2><button class=x onclick=closeModal()>×</button></div><div class=formgrid><div class=field><label>Obra</label><select id=iw>${worksOpts()}</select></div><div class="field span2"><label>Título</label><input id=it placeholder="Título del informe"></div><div class=field><label>Fecha</label><input id=idate type=date value="${new Date().toISOString().slice(0,10)}"></div><div class=field><label>Categoría</label><select id=ic><option value="">Sin categoría</option>${catsOpts()}</select></div><div class=field><label>Zona</label><input id=iz></div><div class=field><label>Ubicación</label><input id=il></div><div class=field><label>Responsable</label><input id=ir></div><div class=field><label>Estado</label><select id=is><option>Pendiente</option><option>En proceso</option><option>Solucionada</option><option>Cerrada</option></select></div><div class=field><label>Prioridad</label><select id=ip><option>Baja</option><option selected>Media</option><option>Alta</option><option>Urgente</option></select></div><div class="field span3"><label>Descripción</label><textarea id=ides rows=7></textarea></div><div class="field span3"><label>Fotografías y documentos</label><div class=drop id=incDrop>Arrastra y suelta aquí fotografías/PDF o pulsa para seguir la ruta del archivo<input id=ifiles type=file multiple accept="image/*,.pdf" hidden></div><div id=incFiles class=files></div></div></div><div class=toolbar style="justify-content:flex-end;margin-top:15px"><button class="btn ghost" onclick=closeModal()>Cancelar</button><button class="btn primary" onclick=saveIncident()>Crear incidencia</button></div></div>`;$('#iw').value=work||db.works[0];wireDrop('incDrop','ifiles',fs=>{pendingFiles=[...pendingFiles,...fs].map(f=>({name:f.name,type:f.type,size:f.size}));$('#incFiles').innerHTML=pendingFiles.map(f=>`<span class=filechip>${esc(f.name)}</span>`).join('')})}
 function wireDrop(dropId,inputId,cb){let d=$('#'+dropId),i=$('#'+inputId);d.onclick=()=>i.click();i.onchange=()=>cb([...i.files]);['dragenter','dragover'].forEach(e=>d.addEventListener(e,x=>{x.preventDefault();d.classList.add('drag')}));['dragleave','drop'].forEach(e=>d.addEventListener(e,x=>{x.preventDefault();d.classList.remove('drag')}));d.addEventListener('drop',e=>cb([...e.dataTransfer.files]))}
 function saveIncident(){let w=$('#iw').value,t=$('#it').value.trim();if(!t)return alert('Escribe un título.');let d=$('#idate').value,i={id:uid(),no:nextNo(w),work:w,title:t,date:d,updated:d,category:$('#ic').value,zone:$('#iz').value,location:$('#il').value,responsible:$('#ir').value,status:$('#is').value,priority:$('#ip').value,description:$('#ides').value,author:db.user,files:pendingFiles,planCapture:null,history:[{date:d,author:db.user,text:'Incidencia creada',status:$('#is').value,files:[]}]};db.incidents.push(i);save();closeModal();render('incidencias')}
-function showIncident(id){let i=db.incidents.find(x=>x.id===id);$('#modal').classList.remove('hidden');$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><div><h2>${esc(i.work)} - ${i.no}</h2><div class=note>${esc(i.title)}</div></div><button class=x onclick=closeModal()>×</button></div><div class=toolbar style="margin:12px 0"><button class="btn primary" onclick="followUp('${id}')">+ Añadir seguimiento</button><button class="btn ghost" onclick="editIncident('${id}')">Editar datos</button><button class="btn ghost" onclick="reportPDF('${id}')">PDF</button><button class="btn ghost" onclick="reportWord('${id}')">Word</button><button class="btn danger" onclick="deleteIncident('${id}')">Eliminar incidencia</button></div><div class=grid style="grid-template-columns:repeat(3,1fr)"><div class=stat><span>Estado</span><b style="font-size:16px">${esc(i.status)}</b></div><div class=stat><span>Categoría</span><b style="font-size:16px">${esc(i.category||'—')}</b></div><div class=stat><span>Responsable</span><b style="font-size:16px">${esc(i.responsible||'—')}</b></div></div><div class=card><b>Descripción</b><p>${esc(i.description||'—')}</p><div class=note>Zona: ${esc(i.zone||'—')} · Ubicación: ${esc(i.location||'—')} · Realizado por: ${esc(i.author)}</div>${i.files?.length?`<div class=files>${i.files.map(f=>f.url&&f.type&&f.type.startsWith('image/')?`<a href="${esc(f.url)}" target="_blank"><img src="${esc(f.url)}" alt="${esc(f.name)}" style="max-width:240px;max-height:180px;object-fit:cover;border-radius:8px;display:block;margin:6px 0"></a>`:f.url?`<a class="filechip" href="${esc(f.url)}" target="_blank">${esc(f.name)}</a>`:`<span class=filechip>${esc(f.name)}</span>`).join('')}</div>`:''}</div><div class=card><div class=cardhead><h2>Historial</h2></div><div class=timeline>${i.history.slice().reverse().map(h=>`<div class=event><b>${esc(h.text)}</b><br><small>${esc(h.date)} · ${esc(h.author)} · ${esc(h.status||'')}</small>${h.files?.length?`<div class=files>${h.files.map(f=>f.url&&f.type&&f.type.startsWith('image/')?`<a href="${esc(f.url)}" target="_blank"><img src="${esc(f.url)}" alt="${esc(f.name)}" style="max-width:240px;max-height:180px;object-fit:cover;border-radius:8px;display:block;margin:6px 0"></a>`:f.url?`<a class="filechip" href="${esc(f.url)}" target="_blank">${esc(f.name)}</a>`:`<span class=filechip>${esc(f.name)}</span>`).join('')}</div>`:''}</div>`).join('')}</div></div></div>`}
+function showIncident(id){let i=db.incidents.find(x=>x.id===id);$('#modal').classList.remove('hidden');$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><div><h2>${esc(i.work)} - ${i.no}</h2><div class=note>${esc(i.title)}</div></div><button class=x onclick=closeModal()>×</button></div><div class=toolbar style="margin:12px 0"><button class="btn primary" onclick="followUp('${id}')">+ Añadir seguimiento</button><button class="btn ghost" onclick="editIncident('${id}')">Editar datos</button><button class="btn ghost" onclick="reportPDF('${id}')">PDF</button><button class="btn ghost" onclick="reportWord('${id}')">Word</button></div><div class=grid style="grid-template-columns:repeat(3,1fr)"><div class=stat><span>Estado</span><b style="font-size:16px">${esc(i.status)}</b></div><div class=stat><span>Categoría</span><b style="font-size:16px">${esc(i.category||'—')}</b></div><div class=stat><span>Responsable</span><b style="font-size:16px">${esc(i.responsible||'—')}</b></div></div><div class=card><b>Descripción</b><p>${esc(i.description||'—')}</p><div class=note>Zona: ${esc(i.zone||'—')} · Ubicación: ${esc(i.location||'—')} · Realizado por: ${esc(i.author)}</div>${i.files?.length?`<div class=files>${i.files.map(f=>f.url&&f.type&&f.type.startsWith('image/')?`<a href="${esc(f.url)}" target="_blank"><img src="${esc(f.url)}" alt="${esc(f.name)}" style="max-width:240px;max-height:180px;object-fit:cover;border-radius:8px;display:block;margin:6px 0"></a>`:f.url?`<a class="filechip" href="${esc(f.url)}" target="_blank">${esc(f.name)}</a>`:`<span class=filechip>${esc(f.name)}</span>`).join('')}</div>`:''}</div><div class=card><div class=cardhead><h2>Historial</h2></div><div class=timeline>${i.history.slice().reverse().map(h=>`<div class=event><b>${esc(h.text)}</b><br><small>${esc(h.date)} · ${esc(h.author)} · ${esc(h.status||'')}</small>${h.files?.length?`<div class=files>${h.files.map(f=>f.url&&f.type&&f.type.startsWith('image/')?`<a href="${esc(f.url)}" target="_blank"><img src="${esc(f.url)}" alt="${esc(f.name)}" style="max-width:240px;max-height:180px;object-fit:cover;border-radius:8px;display:block;margin:6px 0"></a>`:f.url?`<a class="filechip" href="${esc(f.url)}" target="_blank">${esc(f.name)}</a>`:`<span class=filechip>${esc(f.name)}</span>`).join('')}</div>`:''}</div>`).join('')}</div></div></div>`}
 function followUp(id){let i=db.incidents.find(x=>x.id===id);$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><h2>Seguimiento - ${i.no}</h2><button class=x onclick="showIncident('${id}')">×</button></div><div class=formgrid><div class=field><label>Fecha</label><input id=fdate type=date value="${new Date().toISOString().slice(0,10)}"></div><div class=field><label>Estado</label><select id=fstatus><option>Pendiente</option><option>En proceso</option><option>Solucionada</option><option>Cerrada</option></select></div><div class="field span3"><label>Comentario</label><textarea id=ftext rows=6></textarea></div><div class="field span3"><label>Nuevas fotos/documentos</label><div class=drop id=followDrop>Arrastra y suelta o pulsa para elegir archivos<input id=followFiles type=file multiple accept="image/*,.pdf" hidden></div><div id=followNames class=files></div></div></div><div class=toolbar style="justify-content:flex-end;margin-top:15px"><button class="btn primary" onclick="saveFollow('${id}')">Guardar seguimiento</button></div></div>`;$('#fstatus').value=i.status;window.followPending=[];wireDrop('followDrop','followFiles',fs=>{followPending=[...followPending,...fs];$('#followNames').innerHTML=followPending.map(f=>`<span class=filechip>${esc(f.name)}</span>`).join('')})}async function saveFollow(id){
   let i=db.incidents.find(x=>x.id===id),
       d=$('#fdate').value,
@@ -94,3 +94,855 @@ function followUp(id){let i=db.incidents.find(x=>x.id===id);$('#modal').innerHTM
     i.history.push({
       date:d,
       author:db.user,
+      text:t,
+      status:i.status,
+      files:files
+    });
+
+    save();
+    showIncident(id);
+  }catch(e){
+    console.error(e);
+    setSync('Error al subir archivo');
+    alert('No se pudo subir la foto o documento.');
+  }
+}
+
+function locateIncidentPlan(id){
+  let i=db.incidents.find(x=>x.id===id);if(!i)return;
+  let plans=(db.plans||[]).filter(p=>p.work===i.work&&p.url);
+  if(!plans.length)return alert('Esta obra todavía no tiene planos PDF disponibles.');
+  let current=i.planCapture?.planId||plans[0].id;
+  let options=plans.map((p,n)=>`${n+1}. ${p.name} · Rev. ${p.rev}`).join('\n');
+  let def=Math.max(1,plans.findIndex(p=>p.id===current)+1);
+  let ans=prompt(`Selecciona el plano para la incidencia ${i.no}:\n\n${options}\n\nEscribe el número:`,String(def));
+  if(ans===null)return;let p=plans[(+ans||0)-1];if(!p)return alert('Selección no válida.');openPlanViewer(p,i);
+}
+
+function editIncident(id){
+  let i=db.incidents.find(x=>x.id===id);
+
+  let t=prompt('Título:',i.title);
+  if(t===null)return;
+  i.title=t.trim()||i.title;
+
+  let c=prompt(
+    'Categoría:\n\nDisponibles: '+(db.categories.join(', ')||'Ninguna'),
+    i.category||''
+  );
+  if(c===null)return;
+
+  c=c.trim();
+  if(c && !db.categories.includes(c)){
+    alert('La categoría debe existir en Config.');
+    return;
+  }
+  i.category=c;
+
+  let r=prompt('Responsable:',i.responsible||'');
+  if(r===null)return;
+  i.responsible=r.trim();
+
+  save();
+  showIncident(id);
+}
+function planos(){let w=db.works[0]||'';$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2><select id=pw onchange=renderPlans()>${worksOpts()}</select></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seguir la ruta y seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(w){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}
+async function addPlanFiles(fs){
+  let w=$('#pw').value;
+  let pdfs=fs.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
+  if(!pdfs.length)return;
+  try{
+    setSync('Subiendo planos...');
+    for(const file of pdfs){
+      let stored=await uploadPlanStorage(file);
+      db.plans.push({id:uid(),work:w,name:stored.name,rev:'01',date:new Date().toISOString().slice(0,10),size:stored.size,type:stored.type,url:stored.url});
+    }
+    save();renderPlans();
+  }catch(e){console.error(e);setSync('Error al subir plano');alert('No se pudo subir el plano.');}
+}
+function renderPlans(){let w=$('#pw').value,a=db.plans.filter(p=>p.work===w);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}
+function updatePlan(id){let p=db.plans.find(x=>x.id===id),r=prompt('Nueva revisión:',p.rev);if(r){p.rev=r;p.date=new Date().toISOString().slice(0,10);save();renderPlans()}}
+function delPlan(id){if(confirm('¿Quitar plano?')){db.plans=db.plans.filter(x=>x.id!==id);save();renderPlans()}}
+function markPlan(id){
+  let p=db.plans.find(x=>x.id===id);if(!p)return;
+  let incidents=db.incidents.filter(i=>i.work===p.work);
+  if(!incidents.length)return alert('Esta obra no tiene incidencias.');
+  let nums=incidents.map(i=>`${i.no} - ${i.title}`).join('\n');
+  let no=prompt(`Selecciona la incidencia para localizar en este plano:\n\n${nums}\n\nEscribe el número de incidencia:`,incidents[0].no);
+  if(no===null)return;
+  let incident=incidents.find(i=>i.no===no.trim());
+  if(!incident)return alert('No se ha encontrado esa incidencia.');
+  if(!p.url)return alert('Este plano todavía no tiene un archivo PDF guardado en la nube.');
+  openPlanViewer(p,incident);
+}
+async function openPlanViewer(p,incident){
+  if(!window.pdfjsLib)return alert('No se ha podido cargar el visor PDF.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  $('#modal').classList.remove('hidden');
+  $('#modal').innerHTML=`
+    <div class="modalbox">
+      <div class="modalhead"><div><h2>Localizar incidencia ${esc(incident.no)}</h2><div class="note">${esc(p.name)} · Rev. ${esc(p.rev)}</div></div><button class="x" onclick="closeModal()">×</button></div>
+      <div class="toolbar" style="margin:12px 0">
+        <button class="btn ghost" id="prevPlanPage">← Página</button><span id="planPageInfo">Cargando...</span><button class="btn ghost" id="nextPlanPage">Página →</button>
+        <button class="btn ghost" id="zoomOutPlan">− Zoom</button><span id="planZoomInfo">125%</span><button class="btn ghost" id="zoomInPlan">+ Zoom</button>
+      </div>
+      <div class="note" style="margin-bottom:8px">Pulsa sobre el plano para guardar o mover la localización de la incidencia.</div>
+      <div class="annotWrap" id="planAnnotWrap" style="position:relative">
+        <canvas id="planCanvas" style="display:block"></canvas>
+        <div id="planMarker" style="display:none;position:absolute;width:26px;height:26px;border:4px solid #d32f2f;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none"></div>
+      </div>
+    </div>`;
+  try{
+    const pdf=await pdfjsLib.getDocument(p.url).promise;
+    const saved=incident.planCapture&&incident.planCapture.planId===p.id?incident.planCapture:null;
+    let pageNo=saved&&saved.page?Math.min(pdf.numPages,Math.max(1,+saved.page)):1;
+    let planScale=saved&&saved.zoom?Math.min(3,Math.max(.5,+saved.zoom)):1.25;
+    const canvas=$('#planCanvas'),marker=$('#planMarker');
+
+    function positionMarker(){
+      const cap=incident.planCapture;
+      if(cap&&cap.planId===p.id&&+cap.page===pageNo&&Number.isFinite(+cap.x)&&Number.isFinite(+cap.y)){
+        marker.style.left=(canvas.offsetLeft+(+cap.x*canvas.clientWidth))+'px';
+        marker.style.top=(canvas.offsetTop+(+cap.y*canvas.clientHeight))+'px';
+        marker.style.display='block';
+      }else marker.style.display='none';
+    }
+
+    async function renderPage(){
+      const page=await pdf.getPage(pageNo);
+      const viewport=page.getViewport({scale:planScale});
+      const ctx=canvas.getContext('2d');
+      canvas.width=viewport.width;canvas.height=viewport.height;
+      await page.render({canvasContext:ctx,viewport}).promise;
+      $('#planPageInfo').textContent=`Página ${pageNo} de ${pdf.numPages}`;
+      $('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
+      positionMarker();
+    }
+
+    $('#prevPlanPage').onclick=async()=>{if(pageNo<=1)return;pageNo--;await renderPage();};
+    $('#nextPlanPage').onclick=async()=>{if(pageNo>=pdf.numPages)return;pageNo++;await renderPage();};
+    $('#zoomOutPlan').onclick=async()=>{if(planScale<=.5)return;planScale=Math.max(.5,planScale-.25);await renderPage();};
+    $('#zoomInPlan').onclick=async()=>{if(planScale>=3)return;planScale=Math.min(3,planScale+.25);await renderPage();};
+
+    canvas.onclick=e=>{
+      const rect=canvas.getBoundingClientRect();
+      const x=e.clientX-rect.left,y=e.clientY-rect.top;
+      incident.planCapture={planId:p.id,planName:p.name,planRev:p.rev,planUrl:p.url,page:pageNo,zoom:planScale,x:x/canvas.clientWidth,y:y/canvas.clientHeight};
+      positionMarker();
+      save();
+    };
+    await renderPage();
+  }catch(e){console.error(e);alert('No se pudo abrir el plano en el visor.');closeModal();}
+}
+
+async function renderPlanCapture(cap){
+  if(!cap||!window.pdfjsLib)return null;
+  const plan=db.plans.find(p=>p.id===cap.planId);
+  const url=cap.planUrl||(plan&&plan.url);
+  if(!url)return null;
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf=await pdfjsLib.getDocument(url).promise;
+    const pageNo=Math.min(pdf.numPages,Math.max(1,+cap.page||1));
+    const page=await pdf.getPage(pageNo);
+    const viewport=page.getViewport({scale:1.5});
+    const c=document.createElement('canvas'),ctx=c.getContext('2d');
+    c.width=viewport.width;c.height=viewport.height;
+    await page.render({canvasContext:ctx,viewport}).promise;
+    if(Number.isFinite(+cap.x)&&Number.isFinite(+cap.y)){
+      const x=+cap.x*c.width,y=+cap.y*c.height,r=Math.max(10,c.width*.012);
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='rgba(211,47,47,.22)';ctx.fill();ctx.lineWidth=Math.max(4,r*.28);ctx.strokeStyle='#d32f2f';ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x-r*1.45,y);ctx.lineTo(x+r*1.45,y);ctx.moveTo(x,y-r*1.45);ctx.lineTo(x,y+r*1.45);ctx.lineWidth=Math.max(2,r*.16);ctx.strokeStyle='#d32f2f';ctx.stroke();
+    }
+    return {data:c.toDataURL('image/jpeg',.86),width:c.width,height:c.height,page:pageNo};
+  }catch(e){console.error('No se pudo preparar el plano para el informe',e);return null;}
+}
+async function addPlanCaptureToPDF(d,i,state){
+  if(!i.planCapture)return;
+  let shot=await renderPlanCapture(i.planCapture);if(!shot)return;
+  let y=state.y;
+  if(y+20>270){d.addPage();y=18;}
+  d.setTextColor(93,133,111);d.setFont('helvetica','bold');d.setFontSize(10);d.text('LOCALIZACIÓN EN PLANO',20,y);y+=6;
+  d.setTextColor(70);d.setFont('helvetica','normal');d.setFontSize(8);
+  let label=`${i.planCapture.planName||'Plano'} · Rev. ${i.planCapture.planRev||'—'} · Página ${shot.page}`;
+  let labelLines=d.splitTextToSize(label,170);d.text(labelLines,20,y);y+=labelLines.length*4+3;
+  let maxW=170,maxH=155,ratio=Math.min(maxW/shot.width,maxH/shot.height),w=shot.width*ratio,h=shot.height*ratio;
+  if(y+h>275){d.addPage();y=18;}
+  d.addImage(shot.data,'JPEG',20,y,w,h);y+=h+8;
+  state.y=y;
+}
+
+function actas(){
+  let r=db.minutes.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.work)}</b><br>${esc(m.title)}</td><td>${m.date}</td><td>${m.incidents.length}</td><td>${esc(m.author)}</td><td><button class="btn ghost" onclick="reportMinutePDF('${m.id}')">PDF</button></td></tr>`).join('');
+  $('#content').innerHTML=`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th><th></th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas.</div>'}</div>`;
+}
+function createMinute(){
+  if(!db.works.length)return alert('Primero crea una obra.');
+  let w=prompt('Obra:',db.works[0]);if(!db.works.includes(w))return;
+  let avail=db.incidents.filter(i=>i.work===w);if(!avail.length)return alert('No hay incidencias en esta obra.');
+  let nums=prompt('Números a incluir separados por coma:',avail.map(i=>i.no).join(','));if(!nums)return;
+  let sel=nums.split(',').map(x=>x.trim()),ids=avail.filter(i=>sel.includes(i.no)).map(i=>i.id);
+  if(!ids.length)return alert('No se ha seleccionado ninguna incidencia válida.');
+  let title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra';
+  db.minutes.push({id:uid(),no:String(Math.max(0,...db.minutes.filter(m=>m.work===w).map(m=>+m.no||0))+1).padStart(3,'0'),work:w,title,date:new Date().toISOString().slice(0,10),incidents:ids,author:db.user});
+  save();actas();
+}
+async function reportMinutePDF(id){
+  let m=db.minutes.find(x=>x.id===id);if(!m)return;
+  if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');
+  let incidents=(m.incidents||[]).map(id=>db.incidents.find(i=>i.id===id)).filter(Boolean);
+  let {jsPDF}=window.jspdf,d=new jsPDF({format:'a4'}),y=18,g=[93,133,111];
+  const check=n=>{if(y+n>275){d.addPage();y=18;}};
+  const block=(t,s=9)=>{d.setFont('helvetica','normal');d.setFontSize(s);let lines=d.splitTextToSize(String(t||'—'),170);check(lines.length*5+4);d.text(lines,20,y);y+=lines.length*5+4;};
+  d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(18);d.text('PERLENTAUCHER',20,y);y+=7;
+  d.setFontSize(10);d.text(`ACTA DE OBRA ${m.no}`,20,y);y+=13;
+  d.setTextColor(30);d.setFontSize(15);d.text(m.work,20,y);y+=8;d.setFontSize(12);d.text(m.title,20,y);y+=8;
+  d.setFont('helvetica','normal');d.setFontSize(9);d.text(`${m.date} · ${m.author} · ${incidents.length} incidencia(s)`,20,y);y+=12;
+  for(let i of incidents){
+    check(40);d.setDrawColor(215);d.line(20,y,190,y);y+=7;
+    d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(11);d.text(`${i.no} · ${i.title}`,20,y);y+=6;
+    d.setTextColor(30);d.setFontSize(8);d.setFont('helvetica','normal');
+    d.text(`Estado: ${i.status} · Prioridad: ${i.priority} · Responsable: ${i.responsible||'—'}`,20,y);y+=6;
+    d.text(`Categoría: ${i.category||'—'} · Zona: ${i.zone||'—'} · Ubicación: ${i.location||'—'}`,20,y);y+=7;
+    block(i.description||'—',9);
+    if(i.planCapture){let st={y};await addPlanCaptureToPDF(d,i,st);y=st.y;}
+    y+=4;
+  }
+  let pages=d.getNumberOfPages();
+  for(let p=1;p<=pages;p++){d.setPage(p);d.setFont('helvetica','normal');d.setFontSize(8);d.setTextColor(70);d.text(`Generado por: ${m.author}`,20,287);d.text(`Página ${p} de ${pages}`,190,287,{align:'right'});}
+  d.save(`${m.work} - ${m.title} - ${m.no}.pdf`);
+}
+function listados(){$('#content').innerHTML=`<div class=card><div class=cardhead><h2>Listado general</h2><div class=toolbar><button class="btn primary" onclick=exportXLSX()>Exportar Excel</button><button class="btn ghost" onclick=window.print()>Imprimir</button></div></div>${incidentTable(db.incidents)}</div>`}function exportXLSX(){let rows=db.incidents.map(i=>({'Nº':i.no,'Obra':i.work,'Título':i.title,'Categoría':i.category,'Zona':i.zone,'Ubicación':i.location,'Responsable':i.responsible,'Estado':i.status,'Prioridad':i.priority,'Fecha':i.date,'Actualizada':i.updated,'Realizado por':i.author}));if(window.XLSX){let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Incidencias');XLSX.writeFile(wb,'PERLENTAUCHER_Incidencias.xlsx')}else exportCSV(rows)}function exportCSV(rows){let h=Object.keys(rows[0]||{'Nº':''}),csv='\ufeff'+[h,...rows.map(Object.values)].map(r=>r.map(v=>'"'+String(v||'').replaceAll('"','""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='PERLENTAUCHER_Incidencias.csv';a.click()}
+function informes(){
+  let opciones=db.incidents.map(i=>`<option value="${i.id}">${esc(i.work)} - ${i.no} - ${esc(i.title)}</option>`).join('');
+  let obras=db.works.map(w=>`<option value="${esc(w)}">${esc(w)}</option>`).join('');
+  let categorias=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+  $('#content').innerHTML=`
+  <div class=card>
+    <div class=cardhead>
+      <h2>Informe individual</h2>
+    </div>
+
+    ${db.incidents.length?`
+      <div class=formgrid>
+        <div class="field span2">
+          <label>Seleccionar incidencia</label>
+          <select id=reportIncident>${opciones}</select>
+        </div>
+      </div>
+
+      <div class=toolbar style="margin-top:15px">
+        <button class="btn primary" onclick="reportPDF($('#reportIncident').value)">Generar PDF</button>
+        <button class="btn ghost" onclick="reportWord($('#reportIncident').value)">Generar Word</button>
+      </div>
+    `:`<div class=empty>No hay incidencias disponibles para generar informes.</div>`}
+  </div>
+
+  <div class=card>
+    <div class=cardhead>
+      <h2>Informe por categoría</h2>
+    </div>
+
+    <div class=formgrid>
+      <div class=field>
+        <label>Obra</label>
+        <select id=reportWork>${obras}</select>
+      </div>
+
+      <div class=field>
+        <label>Categoría</label>
+        <select id=reportCategory>${categorias}</select>
+      </div>
+    </div>
+
+    <div class=toolbar style="margin-top:15px">
+      <button class="btn primary" onclick="reportCategoryPDF($('#reportWork').value,$('#reportCategory').value)">Generar PDF</button>
+    </div>
+  </div>`;
+}
+async function reportPDF(id){
+  let i=db.incidents.find(x=>x.id===id);
+  let name=`${i.work} - ${i.title} - ${i.no}.pdf`;
+
+  if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');
+
+  let {jsPDF}=window.jspdf;
+  let d=new jsPDF({format:'a4'});
+  let g=[93,133,111];
+  let y=18;
+
+  function checkPage(needed=15){
+    if(y+needed>275){
+      d.addPage();
+      y=18;
+    }
+  }
+
+  function section(title){
+    checkPage(15);
+    d.setTextColor(...g);
+    d.setFont('helvetica','bold');
+    d.setFontSize(10);
+    d.text(title,20,y);
+    d.setTextColor(30);
+    y+=7;
+  }
+
+  function textBlock(text,size=10){
+    d.setFont('helvetica','normal');
+    d.setFontSize(size);
+    let lines=d.splitTextToSize(String(text||'—'),170);
+    checkPage(lines.length*5+5);
+    d.text(lines,20,y);
+    y+=lines.length*5+5;
+  }
+  async function loadImage(url){
+  try{
+    let r=await fetch(url);
+    let blob=await r.blob();
+
+    let data=await new Promise((resolve,reject)=>{
+      let reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=reject;
+      reader.readAsDataURL(blob);
+    });
+
+    let img=await new Promise((resolve,reject)=>{
+      let el=new Image();
+      el.onload=()=>resolve(el);
+      el.onerror=reject;
+      el.src=data;
+    });
+
+    return {data,img};
+  }catch(e){
+    console.error('No se pudo cargar imagen para el PDF',e);
+    return null;
+  }
+}
+
+async function addImages(files){
+  let loaded=[];
+
+  for(let f of files){
+    let image=await loadImage(f.url);
+    if(image)loaded.push(image);
+  }
+
+  if(!loaded.length)return;
+
+  if(loaded.length===1){
+    let {data,img}=loaded[0];
+    let maxW=170,maxH=120;
+    let ratio=Math.min(maxW/img.width,maxH/img.height);
+    let w=img.width*ratio,h=img.height*ratio;
+
+    checkPage(h+8);
+    d.addImage(data,'JPEG',20,y,w,h);
+    y+=h+8;
+    return;
+  }
+
+  let colW=82;
+  let gap=6;
+
+  for(let n=0;n<loaded.length;n+=2){
+    let pair=loaded.slice(n,n+2);
+    let dimensions=pair.map(({img})=>{
+      let ratio=Math.min(colW/img.width,75/img.height);
+      return {w:img.width*ratio,h:img.height*ratio};
+    });
+
+    let rowH=Math.max(...dimensions.map(x=>x.h));
+    checkPage(rowH+8);
+
+    pair.forEach(({data},j)=>{
+      let dim=dimensions[j];
+      let x=20+j*(colW+gap);
+      d.addImage(data,'JPEG',x,y,dim.w,dim.h);
+    });
+
+    y+=rowH+8;
+  }
+}
+
+  d.setTextColor(...g);
+  d.setFont('helvetica','bold');
+  d.setFontSize(18);
+  d.text('PERLENTAUCHER',20,y);
+  y+=7;
+  d.setFontSize(10);
+  d.text('INFORME DE INCIDENCIA',20,y);
+
+  y+=14;
+  d.setTextColor(30);
+  d.setFontSize(15);
+  d.text(`${i.work} - ${i.no}`,20,y);
+  y+=8;
+  d.setFontSize(12);
+  let titleLines=d.splitTextToSize(i.title,170);
+  d.text(titleLines,20,y);
+  y+=titleLines.length*6+8;
+
+  let datos=[
+    ['Categoría',i.category],
+    ['Zona',i.zone],
+    ['Ubicación',i.location],
+    ['Responsable',i.responsible],
+    ['Estado',i.status],
+    ['Prioridad',i.priority]
+  ];
+
+  datos.forEach((x,k)=>{
+    let col=k%3,row=Math.floor(k/3);
+    let yy=y+row*12;
+    d.setFont('helvetica','bold');
+    d.setFontSize(8);
+    d.text(x[0].toUpperCase(),20+col*58,yy);
+    d.setFont('helvetica','normal');
+    d.text(String(x[1]||'—'),20+col*58,yy+5);
+  });
+
+  y+=31;
+
+  section('DESCRIPCIÓN');
+  textBlock(i.description||'—');
+
+  let initialImages=(i.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+  if(initialImages.length){
+    section('FOTOGRAFÍAS');
+    await addImages(initialImages);
+  }
+
+  if(i.planCapture){
+    let planState={y};
+    await addPlanCaptureToPDF(d,i,planState);
+    y=planState.y;
+  }
+
+  section('SEGUIMIENTO');
+
+  for(let h of (i.history||[])){
+    let imgs=(h.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+    let docs=(h.files||[]).filter(f=>f.url&&!(f.type&&f.type.startsWith('image/')));
+
+    let textLines=d.splitTextToSize(String(h.text||'—'),170);
+    let imageSpace=0;
+
+if(imgs.length===1){
+  imageSpace=128;
+}else if(imgs.length>1){
+  imageSpace=Math.ceil(imgs.length/2)*83;
+}
+
+let minimumBlock=18+(textLines.length*5)+imageSpace+(docs.length*6);
+
+if(minimumBlock<250){
+  checkPage(minimumBlock);
+}else{
+  checkPage(25);
+}
+
+    d.setDrawColor(220);
+    d.line(20,y,190,y);
+    y+=6;
+
+    d.setFont('helvetica','bold');
+    d.setFontSize(9);
+    d.setTextColor(30);
+    d.text(`${h.date||''} · ${h.author||''} · ${h.status||''}`,20,y);
+   y+=6;
+
+    textBlock(h.text||'',9);
+
+    if(imgs.length){
+      await addImages(imgs);
+    }
+
+    for(let f of docs){
+      checkPage(8);
+      d.setFont('helvetica','normal');
+      d.setFontSize(8);
+      d.setTextColor(70);
+      d.text(`Documento adjunto: ${f.name}`,20,y);
+      y+=6;
+    }
+
+    y+=6;
+  }
+
+  let pages=d.getNumberOfPages();
+  for(let p=1;p<=pages;p++){
+    d.setPage(p);
+    d.setFont('helvetica','normal');
+    d.setFontSize(8);
+    d.setTextColor(70);
+    d.text(`Realizado por: ${i.author} · ${i.date}`,20,287);
+    d.text(`Página ${p} de ${pages}`,190,287,{align:'right'});
+  }
+
+  d.save(name);
+}
+ async function reportCategoryPDF(work,category){
+  let incidents=db.incidents.filter(i=>i.work===work&&i.category===category);
+
+  if(!incidents.length){
+    alert('No hay incidencias de esta categoría en la obra seleccionada.');
+    return;
+  }
+
+  if(!window.jspdf){
+    alert('Para generar PDF se necesita conexión en la primera carga.');
+    return;
+  }
+
+  let {jsPDF}=window.jspdf;
+  let d=new jsPDF({format:'a4'});
+  let g=[93,133,111];
+  let y=18;
+
+  function checkPage(needed=15){
+    if(y+needed>275){
+      d.addPage();
+      y=18;
+    }
+  }
+
+  function textBlock(text,size=9){
+    d.setFont('helvetica','normal');
+    d.setFontSize(size);
+    let lines=d.splitTextToSize(String(text||'—'),170);
+    checkPage(lines.length*5+5);
+    d.text(lines,20,y);
+    y+=lines.length*5+5;
+  }
+  async function loadImage(url){
+    try{
+      let r=await fetch(url);
+      let blob=await r.blob();
+
+      let data=await new Promise((resolve,reject)=>{
+        let reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=reject;
+        reader.readAsDataURL(blob);
+      });
+
+      let img=await new Promise((resolve,reject)=>{
+        let el=new Image();
+        el.onload=()=>resolve(el);
+        el.onerror=reject;
+        el.src=data;
+      });
+
+      return {data,img};
+    }catch(e){
+      console.error('No se pudo cargar imagen para el PDF',e);
+      return null;
+    }
+  }
+     async function addImages(files){
+    let loaded=[];
+
+    for(let f of files){
+      let image=await loadImage(f.url);
+      if(image)loaded.push(image);
+    }
+
+    if(!loaded.length)return;
+
+    if(loaded.length===1){
+      let {data,img}=loaded[0];
+      let maxW=170,maxH=120;
+      let ratio=Math.min(maxW/img.width,maxH/img.height);
+      let w=img.width*ratio,h=img.height*ratio;
+
+      checkPage(h+8);
+      d.addImage(data,'JPEG',20,y,w,h);
+      y+=h+8;
+      return;
+    }
+
+    let colW=82;
+    let gap=6;
+
+    for(let n=0;n<loaded.length;n+=2){
+      let pair=loaded.slice(n,n+2);
+
+      let dimensions=pair.map(({img})=>{
+        let ratio=Math.min(colW/img.width,75/img.height);
+        return {w:img.width*ratio,h:img.height*ratio};
+      });
+
+      let rowH=Math.max(...dimensions.map(x=>x.h));
+      checkPage(rowH+8);
+
+      pair.forEach(({data},j)=>{
+        let dim=dimensions[j];
+        let x=20+j*(colW+gap);
+        d.addImage(data,'JPEG',x,y,dim.w,dim.h);
+      });
+
+      y+=rowH+8;
+    }
+  }
+  d.setTextColor(...g);
+  d.setFont('helvetica','bold');
+  d.setFontSize(18);
+  d.text('PERLENTAUCHER',20,y);
+
+  y+=7;
+  d.setFontSize(10);
+  d.text('INFORME POR CATEGORÍA',20,y);
+
+  y+=14;
+  d.setTextColor(30);
+  d.setFontSize(15);
+  d.text(work,20,y);
+
+  y+=8;
+  d.setFontSize(12);
+  d.text(`Categoría: ${category}`,20,y);
+
+  y+=12;
+  d.setFontSize(9);
+  d.setFont('helvetica','normal');
+  d.text(`Total de incidencias: ${incidents.length}`,20,y);
+
+  y+=12;
+
+  for(let i of incidents){
+    checkPage(45);
+
+    d.setDrawColor(210);
+    d.line(20,y,190,y);
+    y+=7;
+
+    d.setTextColor(...g);
+    d.setFont('helvetica','bold');
+    d.setFontSize(11);
+    d.text(`${i.no} · ${i.title}`,20,y);
+
+    y+=6;
+    d.setTextColor(30);
+    d.setFontSize(8);
+    d.setFont('helvetica','normal');
+    d.text(
+      `Estado: ${i.status} · Prioridad: ${i.priority} · Responsable: ${i.responsible||'—'}`,
+      20,
+      y
+    );
+
+    y+=6;
+    d.text(
+      `Zona: ${i.zone||'—'} · Ubicación: ${i.location||'—'} · Actualizada: ${i.updated||i.date}`,
+      20,
+      y
+    );
+
+    y+=8;
+    d.setFont('helvetica','bold');
+    d.text('Descripción',20,y);
+    y+=5;
+
+    textBlock(i.description||'—',9);
+
+    if(i.planCapture){
+      let planState={y};
+      await addPlanCaptureToPDF(d,i,planState);
+      y=planState.y;
+    }
+
+    if((i.history||[]).length){
+      checkPage(15);
+
+      d.setFont('helvetica','bold');
+      d.setFontSize(8);
+      d.setTextColor(...g);
+      d.text('SEGUIMIENTO',20,y);
+      y+=7;
+
+      for(let h of (i.history||[])){
+        let lines=d.splitTextToSize(String(h.text||'—'),170);
+        checkPage(14+(lines.length*5));
+
+        d.setDrawColor(225);
+        d.line(20,y,190,y);
+        y+=5;
+
+        d.setFont('helvetica','bold');
+        d.setFontSize(8);
+        d.setTextColor(30);
+        d.text(`${h.date||''} · ${h.author||''} · ${h.status||''}`,20,y);
+        y+=5;
+
+        textBlock(h.text||'—',8);
+                let imgs=(h.files||[]).filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+
+        if(imgs.length){
+          await addImages(imgs);
+        }
+      }
+    }
+    y+=4;
+  }
+
+  let pages=d.getNumberOfPages();
+
+  for(let p=1;p<=pages;p++){
+    d.setPage(p);
+    d.setFont('helvetica','normal');
+    d.setFontSize(8);
+    d.setTextColor(70);
+    d.text(`Generado por: ${db.user}`,20,287);
+    d.text(`Página ${p} de ${pages}`,190,287,{align:'right'});
+  }
+
+  let name=`${work} - ${category} - Informe por categoria.pdf`;
+  d.save(name);
+} 
+function config(){
+  $('#content').innerHTML=`<div class=card><h2>Usuario actual</h2><div class=toolbar><input id=uname value="${esc(db.user)}"><button class="btn primary" onclick="db.user=$('#uname').value.trim()||'Usuario';save();render('config')">Guardar</button></div></div><div class=card><div class=cardhead><h2>Categorías</h2><div class=toolbar><input id=newCat placeholder="Nueva categoría"><button class="btn primary" onclick=addCat()>+ Añadir</button></div></div>${db.categories.length?db.categories.map(c=>`<span class=filechip>${esc(c)} <button onclick="delCat('${esc(c)}')" style="border:0;background:transparent">×</button></span>`).join(''):'<div class=empty>Las categorías comienzan vacías.</div>'}</div><div class=card><b>Sincronización multiusuario</b><p class=note>La aplicación está preparada como PWA de escritorio y móvil. Para sincronización real entre compañeros hace falta publicar esta carpeta en HTTPS y conectar un backend/base de datos común. Las credenciales del servicio no se incluyen en el paquete por seguridad.</p></div>`;
+}
+function addCat(){let v=$('#newCat').value.trim();if(v&&!db.categories.includes(v)){db.categories.push(v);save();config()}}
+function delCat(c){if(db.incidents.some(i=>i.category===c))return alert('Categoría en uso.');db.categories=db.categories.filter(x=>x!==c);save();config()}
+function reportWord(id){let i=db.incidents.find(x=>x.id===id),name=`${i.work} - ${i.title} - ${i.no}.doc`,html=`<html><head><meta charset=utf-8><style>body{font-family:Arial;margin:40px}h1,h3{color:#5d856f}table{width:100%;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #ddd}</style></head><body><h1>PERLENTAUCHER</h1><h3>INFORME DE INCIDENCIA</h3><h2>${esc(i.work)} - ${i.no}<br>${esc(i.title)}</h2><table><tr><td>Categoría: ${esc(i.category||'—')}</td><td>Zona: ${esc(i.zone||'—')}</td><td>Ubicación: ${esc(i.location||'—')}</td></tr><tr><td>Responsable: ${esc(i.responsible||'—')}</td><td>Estado: ${esc(i.status)}</td><td>Prioridad: ${esc(i.priority)}</td></tr></table><h3>Descripción</h3><p>${esc(i.description||'')}</p><h3>Seguimiento</h3>${i.history.map(h=>`<p><b>${esc(h.date)} · ${esc(h.author)}</b><br>${esc(h.text)}</p>`).join('')}</body></html>`;let a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff',html],{type:'application/msword'}));a.download=name;a.click()}
+
+// ===== MEJORAS PILOTO 17-09-2026 =====
+function normalizeData(){
+  db.groups=db.groups||[];
+  db.incidents.forEach(i=>{
+    if(!Array.isArray(i.categories))i.categories=i.category?[i.category]:[];
+    if(!Array.isArray(i.responsibles))i.responsibles=i.responsible?[i.responsible]:[];
+    i.dueDate=i.dueDate||'';i.groupId=i.groupId||'';i.mergedInto=i.mergedInto||'';i.history=i.history||[];
+  });
+  db.minutes.forEach(m=>{m.notes=m.notes||'';m.snapshot=m.snapshot||null;});
+}
+normalizeData();
+
+const _pullCloudBase=pullCloud;
+pullCloud=async function(first=false){
+  if(syncBusy)return;
+  try{
+    let r=await fetch(SUPABASE_URL+'/rest/v1/app_state?id=eq.1&select=data,updated_at',{headers:apiHeaders,cache:'no-store'});
+    if(!r.ok)throw new Error(await r.text());
+    let rows=await r.json();
+    if(!rows.length){if(first)await pushCloud();return;}
+    let remote=rows[0].data||structuredClone(seed),rs=JSON.stringify(remote);
+    if(rs!==lastRemote&&rs!==JSON.stringify(db)){db=remote;normalizeData();localSave();lastRemote=JSON.stringify(db);setSync('Sincronizado');render(currentView);}else{lastRemote=rs;setSync('Sincronizado');}
+  }catch(e){console.error(e);setSync('Sin conexión');}
+}
+
+let activeWork=localStorage.getItem(KEY+'_activeWork')||db.works[0]||'';
+function ensureActiveWork(){if(!db.works.includes(activeWork))activeWork=db.works[0]||'';return activeWork}
+function setActiveWork(w,v=currentView){activeWork=w;localStorage.setItem(KEY+'_activeWork',w);render(v)}
+function workScope(v){ensureActiveWork();return db.works.length?`<div class="workScope toolbar"><b>Obra activa:</b><select onchange="setActiveWork(this.value,'${v}')">${db.works.map(w=>`<option ${w===activeWork?'selected':''}>${esc(w)}</option>`).join('')}</select><span class=note>Todo lo mostrado corresponde a esta obra.</span></div>`:''}
+function catsOf(i){return Array.isArray(i.categories)?i.categories:(i.category?[i.category]:[])}
+function respsOf(i){return Array.isArray(i.responsibles)?i.responsibles:(i.responsible?[i.responsible]:[])}
+function lastActivity(i){let h=(i.history||[]).map(x=>x.date).filter(Boolean);return [i.updated,i.date,...h].filter(Boolean).sort().slice(-1)[0]||''}
+function trace(i,text){let d=new Date().toISOString().slice(0,10);i.updated=d;i.history.push({date:d,author:db.user,text,status:i.status,files:[]})}
+function multiChecks(id,items,selected=[]){return `<div class=multiChecks id="${id}">${items.length?items.map(x=>`<label><input type=checkbox value="${esc(x)}" ${selected.includes(x)?'checked':''}> ${esc(x)}</label>`).join(''):'<span class=note>No hay opciones configuradas.</span>'}</div>`}
+function checkedVals(id){return [...document.querySelectorAll('#'+id+' input:checked')].map(x=>x.value)}
+function dashboard(){ensureActiveWork();let a=db.incidents.filter(i=>i.work===activeWork&&!i.mergedInto),s=x=>a.filter(i=>i.status===x).length,today=new Date().toISOString().slice(0,10),over=a.filter(i=>i.dueDate&&i.dueDate<today&&i.status!=='Cerrada').length;$('#content').innerHTML=workScope('dashboard')+`<div class=grid><div class=stat><b>${a.length}</b><span>Incidencias</span></div><div class=stat><b>${s('Pendiente')}</b><span>Pendientes</span></div><div class=stat><b>${s('En proceso')}</b><span>En proceso</span></div><div class=stat><b>${over}</b><span>Vencidas</span></div></div><div class=card><div class=cardhead><h2>Incidencias recientes</h2><button class="btn primary no-print" onclick="openIncident('${esc(activeWork)}')">+ Nueva incidencia</button></div>${incidentTable(a.sort((x,y)=>lastActivity(y).localeCompare(lastActivity(x))).slice(0,10))}</div>`}
+function incidentTable(a){if(!a.length)return '<div class=empty>No hay incidencias.</div>';let today=new Date().toISOString().slice(0,10);return `<table><thead><tr><th>Nº</th><th>Título</th><th>Categorías</th><th>Responsables</th><th>Estado</th><th>Fecha límite</th><th>Última actividad</th></tr></thead><tbody>${a.map(i=>`<tr onclick="showIncident('${i.id}')" style="cursor:pointer"><td><b>${i.no}</b>${i.mergedInto?'<br><small>UNIFICADA</small>':''}</td><td><b>${esc(i.title)}</b><br><span class=note>${esc(i.zone||'')}</span></td><td>${esc(catsOf(i).join(', ')||'—')}</td><td>${esc(respsOf(i).join(', ')||'—')}</td><td><span class=pill>${esc(i.status)}</span></td><td class="${i.dueDate&&i.dueDate<today&&i.status!=='Cerrada'?'overdue':''}">${esc(i.dueDate||'—')}</td><td>${esc(lastActivity(i))}</td></tr>`).join('')}</tbody></table>`}
+function incidencias(){ensureActiveWork();let f=`<div class=toolbar><select id=fc onchange=filterInc()><option value="">Todas las categorías</option>${catsOpts()}</select><select id=fs onchange=filterInc()><option value="">Todos los estados</option><option>Pendiente</option><option>En proceso</option><option>Solucionada</option><option>Cerrada</option></select><input id=fq oninput=filterInc() placeholder="Buscar nº, título, zona, responsable..."></div>`;$('#content').innerHTML=workScope('incidencias')+`<div class=card><div class=cardhead><h2>Incidencias</h2>${f}</div><div id=incTable></div></div>`;filterInc()}
+function filterInc(){let c=$('#fc')?.value||'',st=$('#fs')?.value||'',q=($('#fq')?.value||'').toLowerCase();let a=db.incidents.filter(i=>i.work===activeWork&&!i.mergedInto&&(!c||catsOf(i).includes(c))&&(!st||i.status===st)&&(!q||JSON.stringify(i).toLowerCase().includes(q)));$('#incTable').innerHTML=incidentTable(a)}
+pendingFiles=[];
+function openIncident(work=''){if(!db.works.length)return alert('Primero añade una obra.');pendingFiles=[];let w=work||ensureActiveWork();$('#modal').classList.remove('hidden');$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><h2>Nueva incidencia</h2><button class=x onclick=closeModal()>×</button></div><div class=formgrid><div class=field><label>Obra</label><select id=iw>${worksOpts()}</select></div><div class="field span2"><label>Título</label><input id=it></div><div class=field><label>Fecha</label><input id=idate type=date value="${new Date().toISOString().slice(0,10)}"></div><div class=field><label>Fecha límite</label><input id=idue type=date></div><div class="field span3"><label>Categorías (puedes marcar varias)</label>${multiChecks('icats',db.categories)}</div><div class="field span3"><label>Responsables (separados por coma)</label><input id=ir placeholder="Ej.: Electricista, Fontanero"></div><div class=field><label>Zona</label><input id=iz></div><div class=field><label>Ubicación</label><input id=il></div><div class=field><label>Estado</label><select id=is><option>Pendiente</option><option>En proceso</option><option>Solucionada</option><option>Cerrada</option></select></div><div class=field><label>Prioridad</label><select id=ip><option>Baja</option><option selected>Media</option><option>Alta</option><option>Urgente</option></select></div><div class="field span3"><label>Descripción</label><textarea id=ides rows=6></textarea></div><div class="field span3"><label>Fotografías y documentos</label><div class=drop id=incDrop>Arrastra y suelta aquí o pulsa para elegir<input id=ifiles type=file multiple accept="image/*,.pdf" hidden></div><div id=incFiles class=files></div></div></div><div class=toolbar style="justify-content:flex-end;margin-top:15px"><button class="btn ghost" onclick=closeModal()>Cancelar</button><button class="btn primary" onclick=saveIncident()>Crear incidencia</button></div></div>`;$('#iw').value=w;wireDrop('incDrop','ifiles',fs=>{pendingFiles=[...pendingFiles,...fs];$('#incFiles').innerHTML=pendingFiles.map(f=>`<span class=filechip>${esc(f.name)}</span>`).join('')})}
+async function saveIncident(){let w=$('#iw').value,t=$('#it').value.trim();if(!t)return alert('Escribe un título.');try{setSync('Subiendo archivos...');let files=[];for(const f of pendingFiles)files.push(await uploadStorage(f));let d=$('#idate').value,cats=checkedVals('icats'),resps=$('#ir').value.split(',').map(x=>x.trim()).filter(Boolean);let i={id:uid(),no:nextNo(w),work:w,title:t,date:d,updated:d,dueDate:$('#idue').value,categories:cats,category:cats[0]||'',zone:$('#iz').value,location:$('#il').value,responsibles:resps,responsible:resps.join(', '),status:$('#is').value,priority:$('#ip').value,description:$('#ides').value,author:db.user,files,planCapture:null,groupId:'',mergedInto:'',history:[{date:d,author:db.user,text:'Incidencia creada',status:$('#is').value,files:[]}]};db.incidents.push(i);activeWork=w;save();closeModal();render('incidencias')}catch(e){console.error(e);setSync('Error al subir archivo');alert('No se pudo crear la incidencia o subir sus archivos.')}}
+function showIncident(id){let i=db.incidents.find(x=>x.id===id);if(!i)return;db.groups=db.groups||[];i.history=i.history||[];let group=db.groups.find(g=>g.id===i.groupId),merged=i.mergedInto?db.incidents.find(x=>x.id===i.mergedInto):null;$('#modal').classList.remove('hidden');$('#modal').innerHTML=`<div class=modalbox><div class=modalhead><div><h2>${esc(i.work)} - ${i.no}</h2><div class=note>${esc(i.title)}</div></div><button class=x onclick=closeModal()>×</button></div>${merged?`<div class=card><b>Incidencia unificada con ${esc(merged.no)} - ${esc(merged.title)}</b></div>`:''}<div class=toolbar style="margin:12px 0"><button class="btn primary" onclick="followUp('${id}')">+ Añadir seguimiento</button><button class="btn ghost" onclick="editIncident('${id}')">Editar datos</button><button class="btn ghost" onclick="locateIncidentPlan('${id}')">📍 Plano / Localizar</button><button class="btn ghost" onclick="groupIncident('${id}')">Agrupar</button><button class="btn ghost" onclick="mergeIncident('${id}')">Unificar duplicado</button><button class="btn ghost" onclick="reportPDF('${id}')">PDF</button><button class="btn ghost" onclick="reportWord('${id}')">Word</button></div><div class=grid style="grid-template-columns:repeat(3,1fr)"><div class=stat><span>Estado</span><b style="font-size:16px">${esc(i.status)}</b></div><div class=stat><span>Categorías</span><b style="font-size:16px">${esc(catsOf(i).join(', ')||'—')}</b></div><div class=stat><span>Responsables</span><b style="font-size:16px">${esc(respsOf(i).join(', ')||'—')}</b></div></div><div class=card><b>Descripción</b><p>${esc(i.description||'—')}</p><div class=note>Zona: ${esc(i.zone||'—')} · Ubicación: ${esc(i.location||'—')} · Fecha límite: ${esc(i.dueDate||'—')} · Grupo: ${esc(group?.name||'—')} · Realizado por: ${esc(i.author)}</div>${i.files?.length?`<div class=files>${i.files.map(f=>f.url&&f.type?.startsWith('image/')?`<a href="${esc(f.url)}" target="_blank"><img src="${esc(f.url)}" style="max-width:240px;max-height:180px;object-fit:cover;border-radius:8px"></a>`:f.url?`<a class=filechip href="${esc(f.url)}" target="_blank">${esc(f.name)}</a>`:`<span class=filechip>${esc(f.name)}</span>`).join('')}</div>`:''}</div>${i.planCapture?`<div class=card><div class=cardhead><h2>Localización guardada en plano</h2></div><div id=incidentPlanPreview class=note>Preparando vista localizada…</div></div>`:''}<div class=card><div class=cardhead><h2>Historial</h2></div><div class=timeline>${i.history.slice().reverse().map(h=>`<div class=event><b>${esc(h.text)}</b><br><small>${esc(h.date)} · ${esc(h.author)} · ${esc(h.status||'')}</small>${h.files?.length?`<div class=files>${h.files.map(f=>f.url&&f.type?.startsWith('image/')?`<a href="${esc(f.url)}" target="_blank"><img src="${esc(f.url)}" style="max-width:240px;max-height:180px;object-fit:cover;border-radius:8px"></a>`:f.url?`<a class=filechip href="${esc(f.url)}" target="_blank">${esc(f.name)}</a>`:'').join('')}</div>`:''}</div>`).join('')}</div></div></div>`;if(i.planCapture){renderPlanCapture(i.planCapture).then(shot=>{let el=$('#incidentPlanPreview');if(!el)return;if(!shot){el.textContent='No se pudo preparar la vista del plano.';return}el.innerHTML=`<img src="${shot.data}" alt="Localización en plano" style="display:block;max-width:100%;max-height:520px;object-fit:contain;border-radius:10px;border:1px solid #dfe5e1"><div class=note style="margin-top:7px">${esc(i.planCapture.planName||'Plano')} · Rev. ${esc(i.planCapture.planRev||'—')} · Página ${shot.page}</div>`})}}
+function editIncident(id){let i=db.incidents.find(x=>x.id===id),before=JSON.stringify({title:i.title,categories:catsOf(i),responsibles:respsOf(i),dueDate:i.dueDate});let t=prompt('Título:',i.title);if(t===null)return;i.title=t.trim()||i.title;let c=prompt('Categorías separadas por coma:\nDisponibles: '+(db.categories.join(', ')||'Ninguna'),catsOf(i).join(', '));if(c===null)return;let cats=c.split(',').map(x=>x.trim()).filter(Boolean);if(cats.some(x=>!db.categories.includes(x)))return alert('Todas las categorías deben existir en Config.');i.categories=cats;i.category=cats[0]||'';let r=prompt('Responsables separados por coma:',respsOf(i).join(', '));if(r===null)return;i.responsibles=r.split(',').map(x=>x.trim()).filter(Boolean);i.responsible=i.responsibles.join(', ');let due=prompt('Fecha límite (AAAA-MM-DD, vacío = sin fecha):',i.dueDate||'');if(due===null)return;i.dueDate=due.trim();let after=JSON.stringify({title:i.title,categories:i.categories,responsibles:i.responsibles,dueDate:i.dueDate});if(before!==after)trace(i,'Datos de la incidencia actualizados');save();showIncident(id)}
+function groupIncident(id){let i=db.incidents.find(x=>x.id===id),same=db.groups.filter(g=>g.work===i.work);let names=same.map(g=>g.name).join('\n');let name=prompt('Nombre del grupo. Escribe uno existente o crea uno nuevo:\n'+names,(same.find(g=>g.id===i.groupId)||{}).name||'');if(name===null||!name.trim())return;name=name.trim();let g=same.find(x=>x.name.toLowerCase()===name.toLowerCase());if(!g){g={id:uid(),work:i.work,name,created:new Date().toISOString().slice(0,10),author:db.user};db.groups.push(g)}i.groupId=g.id;trace(i,'Incidencia agrupada en: '+g.name);save();showIncident(id)}
+function mergeIncident(id){let i=db.incidents.find(x=>x.id===id),avail=db.incidents.filter(x=>x.work===i.work&&x.id!==id&&!x.mergedInto);if(!avail.length)return alert('No hay otra incidencia disponible en esta obra.');let no=prompt('Número de la incidencia PRINCIPAL que conservará la información:\n'+avail.map(x=>x.no+' - '+x.title).join('\n'));if(no===null)return;let main=avail.find(x=>x.no===no.trim());if(!main)return alert('Número no encontrado.');if(!confirm(`La ${i.no} quedará marcada como unificada con la ${main.no}. No se borrará nada. ¿Continuar?`))return;main.history.push(...(i.history||[]).map(h=>({...h,text:`[Procedente de incidencia ${i.no}] ${h.text}`})));main.files=[...(main.files||[]),...(i.files||[])];if(!main.planCapture&&i.planCapture)main.planCapture=i.planCapture;main.categories=[...new Set([...catsOf(main),...catsOf(i)])];main.category=main.categories[0]||'';main.responsibles=[...new Set([...respsOf(main),...respsOf(i)])];main.responsible=main.responsibles.join(', ');trace(main,`Incidencia ${i.no} unificada en esta incidencia`);i.mergedInto=main.id;trace(i,`Unificada con incidencia ${main.no}`);save();showIncident(id)}
+// Visor de plano: varias marcas, edición temporal y confirmación explícita.
+openPlanViewer=async function(p,incident){
+  if(!window.pdfjsLib)return alert('No se ha podido cargar el visor PDF.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const original=incident.planCapture&&incident.planCapture.planId===p.id?structuredClone(incident.planCapture):null;
+  let draft=original?structuredClone(original):{planId:p.id,planName:p.name,planRev:p.rev,planDate:p.date,planUrl:p.url,page:1,zoom:1.25,marks:[],view:null};
+  if(!Array.isArray(draft.marks))draft.marks=(Number.isFinite(+draft.x)&&Number.isFinite(+draft.y))?[{x:+draft.x,y:+draft.y}]:[];
+  $('#modal').classList.remove('hidden');
+  $('#modal').innerHTML=`<div class=modalbox><div class=modalhead><div><h2>Localizar incidencia ${esc(incident.no)}</h2><div class=note>${esc(p.name)} · Rev. ${esc(p.rev)}</div></div><button class=x id=cancelPlanX>×</button></div><div class=toolbar style="margin:12px 0"><button class="btn ghost" id=prevPlanPage>← Página</button><span id=planPageInfo>Cargando...</span><button class="btn ghost" id=nextPlanPage>Página →</button><button class="btn ghost" id=zoomOutPlan>− Zoom</button><span id=planZoomInfo></span><button class="btn ghost" id=zoomInPlan>+ Zoom</button></div><div class=note style="margin-bottom:8px">Ajusta el zoom y desplázate hasta la zona. Pulsa sobre el plano para añadir varias marcas. Los cambios solo se guardan al pulsar <b>Aceptar / Guardar localización</b>.</div><div class=annotWrap id=planAnnotWrap style="position:relative"><div id=planStage style="position:relative;display:inline-block"><canvas id=planCanvas style="display:block"></canvas><div id=planMarkers style="position:absolute;inset:0;pointer-events:none"></div></div></div><div class=card style="margin-top:10px"><div class=cardhead><h2>Marcas</h2><button class="btn danger" id=clearPlanMarks>Eliminar todas</button></div><div id=planMarksList class=files></div></div><div class=toolbar style="justify-content:flex-end;margin-top:14px"><button class="btn ghost" id=cancelPlan>Cancelar</button><button class="btn primary" id=acceptPlan>✓ Aceptar / Guardar localización</button></div></div>`;
+  try{
+    const pdf=await pdfjsLib.getDocument(p.url).promise;
+    let pageNo=Math.min(pdf.numPages,Math.max(1,+draft.page||1));
+    let planScale=Math.min(3,Math.max(.5,+draft.zoom||1.25));
+    const canvas=$('#planCanvas'),wrap=$('#planAnnotWrap'),markers=$('#planMarkers');
+    let restoreView=draft.view&&+draft.page===pageNo?structuredClone(draft.view):null;
+    function marksForPage(){return draft.marks.filter(m=>(+m.page||+draft.page||1)===pageNo)}
+    function drawMarkers(){
+      markers.innerHTML='';
+      draft.marks.forEach((m,idx)=>{if((+m.page||+draft.page||1)!==pageNo)return;let el=document.createElement('div');el.textContent=String(idx+1);el.title='Marca '+(idx+1);el.style.cssText=`position:absolute;left:${(+m.x*100)}%;top:${(+m.y*100)}%;width:28px;height:28px;border:3px solid #d32f2f;background:#fff8;color:#b71c1c;border-radius:50%;transform:translate(-50%,-50%);font-weight:800;line-height:22px;text-align:center;pointer-events:none;box-shadow:0 1px 4px #0005`;markers.appendChild(el)});
+      $('#planMarksList').innerHTML=draft.marks.length?draft.marks.map((m,idx)=>`<span class=filechip>Marca ${idx+1} · pág. ${m.page||pageNo} <button type=button onclick="removeDraftPlanMark(${idx})" style="border:0;background:transparent;color:#a94a45;font-weight:bold;cursor:pointer">×</button></span>`).join(''):'<span class=note>No hay marcas todavía.</span>';
+    }
+    window.removeDraftPlanMark=idx=>{draft.marks.splice(idx,1);drawMarkers()};
+    function currentView(){
+      // Guardamos el viewport real del contenedor desplazable, normalizado respecto al plano.
+      // scrollLeft/scrollTop son más fiables que getBoundingClientRect cuando hay zoom y desplazamiento.
+      const cw=Math.max(1,canvas.clientWidth),ch=Math.max(1,canvas.clientHeight);
+      const x=Math.max(0,Math.min(1,wrap.scrollLeft/cw));
+      const y=Math.max(0,Math.min(1,wrap.scrollTop/ch));
+      const w=Math.max(.01,Math.min(1-x,wrap.clientWidth/cw));
+      const h=Math.max(.01,Math.min(1-y,wrap.clientHeight/ch));
+      return {x,y,w,h};
+    }
+    async function renderPage(){
+      const page=await pdf.getPage(pageNo),viewport=page.getViewport({scale:planScale}),ctx=canvas.getContext('2d');
+      canvas.width=viewport.width;canvas.height=viewport.height;
+      await page.render({canvasContext:ctx,viewport}).promise;
+      $('#planPageInfo').textContent=`Página ${pageNo} de ${pdf.numPages}`;$('#planZoomInfo').textContent=Math.round(planScale*100)+'%';
+      drawMarkers();
+      if(restoreView){const rv=restoreView;restoreView=null;requestAnimationFrame(()=>{wrap.scrollLeft=Math.max(0,Math.min(canvas.clientWidth-wrap.clientWidth,rv.x*canvas.clientWidth));wrap.scrollTop=Math.max(0,Math.min(canvas.clientHeight-wrap.clientHeight,rv.y*canvas.clientHeight))})}
+    }
+    $('#prevPlanPage').onclick=async()=>{if(pageNo>1){pageNo--;draft.page=pageNo;restoreView=null;await renderPage()}};
+    $('#nextPlanPage').onclick=async()=>{if(pageNo<pdf.numPages){pageNo++;draft.page=pageNo;restoreView=null;await renderPage()}};
+    async function changeZoom(next){let center={x:(wrap.scrollLeft+wrap.clientWidth/2)/Math.max(1,canvas.clientWidth),y:(wrap.scrollTop+wrap.clientHeight/2)/Math.max(1,canvas.clientHeight)};planScale=next;draft.zoom=planScale;await renderPage();requestAnimationFrame(()=>{wrap.scrollLeft=Math.max(0,center.x*canvas.clientWidth-wrap.clientWidth/2);wrap.scrollTop=Math.max(0,center.y*canvas.clientHeight-wrap.clientHeight/2)})}
+    $('#zoomOutPlan').onclick=()=>planScale>.5&&changeZoom(Math.max(.5,planScale-.25));
+    $('#zoomInPlan').onclick=()=>planScale<3&&changeZoom(Math.min(3,planScale+.25));
+    canvas.onclick=e=>{const rect=canvas.getBoundingClientRect();draft.marks.push({page:pageNo,x:(e.clientX-rect.left)/rect.width,y:(e.clientY-rect.top)/rect.height});draft.page=pageNo;drawMarkers()};
+    $('#clearPlanMarks').onclick=()=>{if(!draft.marks.length)return;if(confirm('¿Eliminar todas las marcas de esta localización?')){draft.marks=[];drawMarkers()}};
+    const cancel=()=>{delete window.removeDraftPlanMark;showIncident(incident.id)};$('#cancelPlan').onclick=cancel;$('#cancelPlanX').onclick=cancel;
+    $('#acceptPlan').onclick=()=>{if(!draft.marks.length)return alert('Añade al menos una marca antes de guardar.');draft.planId=p.id;draft.planName=p.name;draft.planRev=p.rev;draft.planDate=p.date;draft.planUrl=p.url;draft.page=pageNo;draft.zoom=planScale;draft.view=currentView();delete draft.x;delete draft.y;incident.planCapture=structuredClone(draft);trace(incident,`Localización en plano guardada: ${p.name} · Rev. ${p.rev} · ${draft.marks.length} marca(s)`);save();delete window.removeDraftPlanMark;showIncident(incident.id)};
+    await renderPage();
+  }catch(e){console.error(e);alert('No se pudo abrir el plano en el visor.');showIncident(incident.id)}
+}
+renderPlanCapture=async function(cap){
+  if(!cap||!window.pdfjsLib)return null;let plan=db.plans.find(p=>p.id===cap.planId),url=cap.planUrl||(plan&&plan.url);if(!url)return null;
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    let pdf=await pdfjsLib.getDocument(url).promise,pageNo=Math.min(pdf.numPages,Math.max(1,+cap.page||1)),page=await pdf.getPage(pageNo),viewport=page.getViewport({scale:2}),c=document.createElement('canvas'),ctx=c.getContext('2d');c.width=viewport.width;c.height=viewport.height;await page.render({canvasContext:ctx,viewport}).promise;
+    let marks=Array.isArray(cap.marks)?cap.marks.filter(m=>(+m.page||pageNo)===pageNo):((Number.isFinite(+cap.x)&&Number.isFinite(+cap.y))?[{page:pageNo,x:+cap.x,y:+cap.y}]:[]);
+    marks.forEach((m,idx)=>{let x=+m.x*c.width,y=+m.y*c.height,r=Math.max(13,c.width*.014);ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.82)';ctx.fill();ctx.lineWidth=Math.max(4,r*.24);ctx.strokeStyle='#d32f2f';ctx.stroke();ctx.fillStyle='#b71c1c';ctx.font=`bold ${Math.max(12,Math.round(r*1.05))}px Arial`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(String(idx+1),x,y)});
+    let view=cap.view&&Number.isFinite(+cap.view.x)&&Number.isFinite(+cap.view.y)&&Number.isFinite(+cap.view.w)&&Number.isFinite(+cap.view.h)?{x:+cap.view.x,y:+cap.view.y,w:+cap.view.w,h:+cap.view.h}:null;
+    // Compatibilidad: si una captura antigua no tenía viewport útil, creamos un recorte localizado alrededor de las marcas.
+    if((!view||view.w>=.985&&view.h>=.985)&&marks.length){
+      let xs=marks.map(m=>+m.x),ys=marks.map(m=>+m.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys),pad=.12;
+      let x=Math.max(0,minX-pad),y=Math.max(0,minY-pad),right=Math.min(1,maxX+pad),bottom=Math.min(1,maxY+pad);
+      let w=Math.max(.28,right-x),h=Math.max(.28,bottom-y);if(x+w>1)x=Math.max(0,1-w);if(y+h>1)y=Math.max(0,1-h);view={x,y,w:Math.min(1,w),h:Math.min(1,h)};
+    }
+    if(view&&view.w>0&&view.h>0){let sx=Math.max(0,Math.floor(view.x*c.width)),sy=Math.max(0,Math.floor(view.y*c.height)),sw=Math.min(c.width-sx,Math.max(1,Math.floor(view.w*c.width))),sh=Math.min(c.height-sy,Math.max(1,Math.floor(view.h*c.height))),out=document.createElement('canvas');out.width=sw;out.height=sh;out.getContext('2d').drawImage(c,sx,sy,sw,sh,0,0,sw,sh);return {data:out.toDataURL('image/jpeg',.9),width:out.width,height:out.height,page:pageNo}}
+    return {data:c.toDataURL('image/jpeg',.86),width:c.width,height:c.height,page:pageNo};
+  }catch(e){console.error('No se pudo preparar el plano para el informe',e);return null}
+}
+function planos(){ensureActiveWork();$('#content').innerHTML=workScope('planos')+`<div class=card><div class=cardhead><h2>Biblioteca de planos</h2></div><div class=drop id=planDrop>Arrastra y suelta planos PDF aquí o pulsa para seleccionarlos<input id=planFiles type=file multiple accept="application/pdf,.pdf" hidden></div><div id=plans style="margin-top:12px"></div></div>`;if(activeWork){wireDrop('planDrop','planFiles',addPlanFiles);renderPlans()}else $('#plans').innerHTML='<div class=empty>Crea una obra antes de añadir planos.</div>'}
+function renderPlans(){let a=db.plans.filter(p=>p.work===activeWork);$('#plans').innerHTML=a.length?a.map(p=>`<div class=plan><div><b>${esc(p.name)}</b><br><span class=note>Rev. ${esc(p.rev)} · ${p.date}</span></div><div><button class="btn ghost" onclick="updatePlan('${p.id}')">Actualizar</button> <button class="btn ghost" onclick="markPlan('${p.id}')">Localizar</button> <button class="btn danger" onclick="delPlan('${p.id}')">Quitar</button></div></div>`).join(''):'<div class=empty>Esta obra todavía no tiene planos.</div>'}
+async function addPlanFiles(fs){let w=activeWork,pdfs=fs.filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));if(!pdfs.length)return;try{setSync('Subiendo planos...');for(const file of pdfs){let stored=await uploadPlanStorage(file);db.plans.push({id:uid(),work:w,name:stored.name,rev:'01',date:new Date().toISOString().slice(0,10),size:stored.size,type:stored.type,url:stored.url})}save();renderPlans()}catch(e){console.error(e);alert('No se pudo subir el plano.')}}
+function actas(){ensureActiveWork();let a=db.minutes.filter(m=>m.work===activeWork),r=a.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.title)}</b></td><td>${m.date}</td><td>${(m.snapshot||m.incidents||[]).length}</td><td>${esc(m.author)}</td><td><button class="btn ghost" onclick="reportMinutePDF('${m.id}')">PDF</button></td></tr>`).join('');$('#content').innerHTML=workScope('actas')+`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th><th></th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas en esta obra.</div>'}</div>`}
+function createMinute(){let w=ensureActiveWork(),avail=db.incidents.filter(i=>i.work===w&&!i.mergedInto);if(!avail.length)return alert('No hay incidencias en esta obra.');let groups=db.groups.filter(g=>g.work===w);let nums=prompt('Números de incidencias separados por coma. Puedes incluir cerradas:\n'+avail.map(i=>i.no+' - '+i.title).join('\n'),avail.map(i=>i.no).join(','));if(!nums)return;let sel=nums.split(',').map(x=>x.trim()),chosen=avail.filter(i=>sel.includes(i.no));if(!chosen.length)return alert('No se ha seleccionado ninguna incidencia válida.');let title=prompt('Título del acta:','Revisión de obra')||'Revisión de obra',notes=prompt('Texto general / acuerdos del acta:','')||'';let snap=structuredClone(chosen);db.minutes.push({id:uid(),no:String(Math.max(0,...db.minutes.filter(m=>m.work===w).map(m=>+m.no||0))+1).padStart(3,'0'),work:w,title,notes,date:new Date().toISOString().slice(0,10),incidents:chosen.map(i=>i.id),snapshot:snap,author:db.user});save();actas()}
+const _reportMinutePDF=reportMinutePDF;
+reportMinutePDF=async function(id){let m=db.minutes.find(x=>x.id===id);if(!m)return;if(!m.snapshot)return _reportMinutePDF(id);if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');let incidents=m.snapshot,{jsPDF}=window.jspdf,d=new jsPDF({format:'a4'}),y=18,g=[93,133,111],check=n=>{if(y+n>275){d.addPage();y=18}},block=(t,s=9)=>{d.setFont('helvetica','normal');d.setFontSize(s);let lines=d.splitTextToSize(String(t||'—'),170);check(lines.length*5+4);d.text(lines,20,y);y+=lines.length*5+4};d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(18);d.text('PERLENTAUCHER',20,y);y+=7;d.setFontSize(10);d.text(`ACTA DE OBRA ${m.no}`,20,y);y+=13;d.setTextColor(30);d.setFontSize(15);d.text(m.work,20,y);y+=8;d.setFontSize(12);d.text(m.title,20,y);y+=8;if(m.notes){d.setFontSize(9);d.setFont('helvetica','normal');block(m.notes,9)}for(let i of incidents){check(40);d.setDrawColor(215);d.line(20,y,190,y);y+=7;d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(11);d.text(`${i.no} · ${i.title}`,20,y);y+=6;d.setTextColor(30);d.setFontSize(8);d.setFont('helvetica','normal');d.text(`Estado: ${i.status} · Prioridad: ${i.priority} · Responsable: ${respsOf(i).join(', ')||'—'}`,20,y);y+=6;d.text(`Categorías: ${catsOf(i).join(', ')||'—'} · Zona: ${i.zone||'—'}`,20,y);y+=7;block(i.description||'—',9);if(i.planCapture){let st={y};await addPlanCaptureToPDF(d,i,st);y=st.y}y+=4}let pages=d.getNumberOfPages();for(let p=1;p<=pages;p++){d.setPage(p);d.setFontSize(8);d.setTextColor(70);d.text(`Generado por: ${m.author}`,20,287);d.text(`Página ${p} de ${pages}`,190,287,{align:'right'})}d.save(`${m.work} - ${m.title} - ${m.no}.pdf`)}
+function listados(){ensureActiveWork();$('#content').innerHTML=workScope('listados')+`<div class=card><div class=cardhead><h2>Listado de ${esc(activeWork)}</h2><div class=toolbar><button class="btn primary" onclick=exportXLSX()>Exportar Excel</button><button class="btn ghost" onclick=window.print()>Imprimir</button></div></div>${incidentTable(db.incidents.filter(i=>i.work===activeWork&&!i.mergedInto))}</div>`}
+function exportXLSX(){let rows=db.incidents.filter(i=>i.work===activeWork&&!i.mergedInto).map(i=>({'Nº':i.no,'Obra':i.work,'Título':i.title,'Categorías':catsOf(i).join(', '),'Zona':i.zone,'Ubicación':i.location,'Responsables':respsOf(i).join(', '),'Estado':i.status,'Prioridad':i.priority,'Fecha':i.date,'Fecha límite':i.dueDate,'Última actividad':lastActivity(i),'Realizado por':i.author}));if(!rows.length)return alert('No hay incidencias en esta obra.');if(window.XLSX){let ws=XLSX.utils.json_to_sheet(rows),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Incidencias');XLSX.writeFile(wb,activeWork+' - Incidencias.xlsx')}else exportCSV(rows)}
+function informes(){ensureActiveWork();let a=db.incidents.filter(i=>i.work===activeWork&&!i.mergedInto),opciones=a.map(i=>`<option value="${i.id}">${i.no} - ${esc(i.title)}</option>`).join(''),categorias=db.categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');$('#content').innerHTML=workScope('informes')+`<div class=card><div class=cardhead><h2>Informe individual</h2></div>${a.length?`<div class=formgrid><div class="field span2"><label>Incidencia</label><select id=reportIncident>${opciones}</select></div></div><div class=toolbar style="margin-top:15px"><button class="btn primary" onclick="reportPDF($('#reportIncident').value)">Generar PDF</button><button class="btn ghost" onclick="reportWord($('#reportIncident').value)">Generar Word</button></div>`:'<div class=empty>No hay incidencias en esta obra.</div>'}</div><div class=card><div class=cardhead><h2>Informe por categoría</h2></div><div class=formgrid><div class=field><label>Categoría</label><select id=reportCategory>${categorias}</select></div></div><div class=toolbar style="margin-top:15px"><button class="btn primary" onclick="reportCategoryPDF('${esc(activeWork)}',$('#reportCategory').value)">Generar PDF</button></div></div>`}
+const _reportCategoryPDF=reportCategoryPDF;
+reportCategoryPDF=async function(work,category){let old=[];db.incidents.forEach(i=>{if(i.work===work&&catsOf(i).includes(category)&&i.category!==category){old.push([i,i.category]);i.category=category}});try{return await _reportCategoryPDF(work,category)}finally{old.forEach(([i,c])=>i.category=c)}}
+const _reportPDF=reportPDF;
+reportPDF=async function(id){let i=db.incidents.find(x=>x.id===id),oc=i.category,or=i.responsible;i.category=catsOf(i).join(', ');i.responsible=respsOf(i).join(', ');try{return await _reportPDF(id)}finally{i.category=oc;i.responsible=or}}
+const _reportWord=reportWord;
+reportWord=function(id){let i=db.incidents.find(x=>x.id===id),oc=i.category,or=i.responsible;i.category=catsOf(i).join(', ');i.responsible=respsOf(i).join(', ');try{return _reportWord(id)}finally{i.category=oc;i.responsible=or}}
+// ===== FIN MEJORAS PILOTO =====
+
+function closeModal(){$('#modal').classList.add('hidden')}if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});render();pullCloud(true);setInterval(()=>pullCloud(false),5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullCloud(false)});
+</script></body></html>
