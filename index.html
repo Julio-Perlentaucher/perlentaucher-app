@@ -946,6 +946,92 @@ const _reportPDF=reportPDF;
 reportPDF=async function(id){let i=db.incidents.find(x=>x.id===id),oc=i.category,or=i.responsible;i.category=catsOf(i).join(', ');i.responsible=respsOf(i).join(', ');try{return await _reportPDF(id)}finally{i.category=oc;i.responsible=or}}
 const _reportWord=reportWord;
 reportWord=function(id){let i=db.incidents.find(x=>x.id===id),oc=i.category,or=i.responsible;i.category=catsOf(i).join(', ');i.responsible=respsOf(i).join(', ');try{return _reportWord(id)}finally{i.category=oc;i.responsible=or}}
+
+// ===== ACTAS CONFIGURABLES 23-09-2026 =====
+function minuteDefaultOptions(){return {number:true,title:true,status:true,categories:true,responsibles:true,priority:true,zone:true,location:true,dueDate:true,description:true,photos:true,plan:true,followup:true}}
+function minuteOptions(m){return {...minuteDefaultOptions(),...((m&&m.options)||{})}}
+function minuteFieldChecks(opts=minuteDefaultOptions()){
+  const fields=[['number','Número de incidencia'],['title','Título de la incidencia'],['status','Estado'],['categories','Categorías'],['responsibles','Responsables'],['priority','Prioridad'],['zone','Zona'],['location','Ubicación'],['dueDate','Fecha límite'],['description','Descripción'],['photos','Fotografías'],['plan','Localización en plano'],['followup','Seguimientos / comentarios']];
+  return `<div class=multiChecks id=minuteFields>${fields.map(([k,l])=>`<label><input type=checkbox data-key="${k}" ${opts[k]?'checked':''}> ${l}</label>`).join('')}</div>`
+}
+actas=function(){
+  ensureActiveWork();
+  let a=db.minutes.filter(m=>m.work===activeWork),r=a.map(m=>`<tr><td>${m.no}</td><td><b>${esc(m.title)}</b></td><td>${m.date}</td><td>${(m.snapshot||m.incidents||[]).length}</td><td>${esc(m.author)}</td><td><button class="btn ghost" onclick="reportMinutePDF('${m.id}')">PDF</button> <button class="btn ghost" onclick="reportMinuteWord('${m.id}')">Word</button></td></tr>`).join('');
+  $('#content').innerHTML=workScope('actas')+`<div class=card><div class=cardhead><h2>Actas</h2><button class="btn primary" onclick=createMinute()>+ Crear acta</button></div>${r?`<table><thead><tr><th>Nº</th><th>Acta</th><th>Fecha</th><th>Incidencias</th><th>Autor</th><th>Exportar</th></tr></thead><tbody>${r}</tbody></table>`:'<div class=empty>No hay actas en esta obra.</div>'}</div>`
+}
+createMinute=function(){
+  let w=ensureActiveWork(),avail=db.incidents.filter(i=>i.work===w&&!i.mergedInto);
+  if(!avail.length)return alert('No hay incidencias en esta obra.');
+  $('#modal').classList.remove('hidden');
+  $('#modal').innerHTML=`<div class=modalbox><div class=modalhead><div><h2>Nueva acta</h2><div class=note>${esc(w)}</div></div><button class=x onclick=closeModal()>×</button></div>
+  <div class=formgrid>
+    <div class="field span2"><label>Título del acta</label><input id=mTitle value="Revisión de obra"></div>
+    <div class=field><label>Fecha</label><input id=mDate type=date value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="field span3"><label>Texto general / acuerdos</label><textarea id=mNotes rows=4></textarea></div>
+    <div class="field span3"><label>Incidencias a incluir</label><div class=checklist id=mIncidentChecks>${avail.map(i=>`<label><input type=checkbox value="${i.id}" checked> <b>${esc(i.no)}</b> · ${esc(i.title)} <span class=note>(${esc(i.status)})</span></label>`).join('')}</div></div>
+    <div class="field span3"><label>Contenido que aparecerá en el acta</label>${minuteFieldChecks()}</div>
+  </div>
+  <div class=toolbar style="justify-content:flex-end;margin-top:15px"><button class="btn ghost" onclick=closeModal()>Cancelar</button><button class="btn primary" onclick=saveMinuteConfigured()>Crear acta</button></div></div>`
+}
+function saveMinuteConfigured(){
+  let w=ensureActiveWork(),ids=[...document.querySelectorAll('#mIncidentChecks input:checked')].map(x=>x.value),chosen=db.incidents.filter(i=>ids.includes(i.id));
+  if(!chosen.length)return alert('Selecciona al menos una incidencia.');
+  let title=$('#mTitle').value.trim()||'Revisión de obra',notes=$('#mNotes').value.trim(),date=$('#mDate').value||new Date().toISOString().slice(0,10),options={};
+  document.querySelectorAll('#minuteFields input[data-key]').forEach(x=>options[x.dataset.key]=x.checked);
+  let no=String(Math.max(0,...db.minutes.filter(m=>m.work===w).map(m=>+m.no||0))+1).padStart(3,'0');
+  db.minutes.push({id:uid(),no,work:w,title,notes,date,incidents:chosen.map(i=>i.id),snapshot:structuredClone(chosen),author:db.user,options});
+  save();closeModal();actas();
+}
+function minutePhotoFiles(i){
+  let files=[...(i.files||[])];
+  (i.history||[]).forEach(h=>files.push(...(h.files||[])));
+  return files.filter(f=>f.url&&f.type&&f.type.startsWith('image/'));
+}
+async function minuteLoadImage(url){
+  try{let r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status);let blob=await r.blob();let data=await new Promise((resolve,reject)=>{let fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob)});let img=await new Promise((resolve,reject)=>{let el=new Image();el.onload=()=>resolve(el);el.onerror=reject;el.src=data});return {data,img}}catch(e){console.error('No se pudo cargar una foto del acta',e);return null}
+}
+async function minuteAddPhotosPDF(d,files,state){
+  let loaded=[];for(let f of files){let x=await minuteLoadImage(f.url);if(x)loaded.push(x)}if(!loaded.length)return;
+  let y=state.y,colW=80,gap=8,maxH=68;
+  for(let n=0;n<loaded.length;n+=2){let pair=loaded.slice(n,n+2),dims=pair.map(({img})=>{let r=Math.min(colW/img.width,maxH/img.height);return {w:img.width*r,h:img.height*r}}),rowH=Math.max(...dims.map(x=>x.h));if(y+rowH>274){d.addPage();y=18}pair.forEach(({data},j)=>d.addImage(data,'JPEG',20+j*(colW+gap),y,dims[j].w,dims[j].h));y+=rowH+6}
+  state.y=y;
+}
+async function minuteAddPlanPDF(d,i,state){
+  if(!i.planCapture)return;let shot=await renderPlanCapture(i.planCapture);if(!shot)return;let y=state.y;
+  if(y+20>274){d.addPage();y=18}
+  d.setFont('helvetica','bold');d.setFontSize(8);d.setTextColor(93,133,111);d.text('LOCALIZACIÓN EN PLANO',20,y);y+=5;
+  d.setFont('helvetica','normal');d.setFontSize(7);d.setTextColor(70);let label=`${i.planCapture.planName||'Plano'} · Rev. ${i.planCapture.planRev||'—'} · Página ${shot.page}`;let ll=d.splitTextToSize(label,82);d.text(ll,20,y);y+=ll.length*3.5+2;
+  let maxW=82,maxH=68,ratio=Math.min(maxW/shot.width,maxH/shot.height),w=shot.width*ratio,h=shot.height*ratio;if(y+h>274){d.addPage();y=18}d.addImage(shot.data,'JPEG',20,y,w,h);state.y=y+h+7;
+}
+reportMinutePDF=async function(id){
+  let m=db.minutes.find(x=>x.id===id);if(!m)return;if(!window.jspdf)return alert('Para generar PDF se necesita conexión en la primera carga.');
+  let incidents=m.snapshot||((m.incidents||[]).map(x=>db.incidents.find(i=>i.id===x)).filter(Boolean)),o=minuteOptions(m),{jsPDF}=window.jspdf,d=new jsPDF({format:'a4'}),y=18,g=[93,133,111];
+  const check=n=>{if(y+n>275){d.addPage();y=18}},text=(t,s=9)=>{d.setFont('helvetica','normal');d.setFontSize(s);d.setTextColor(30);let lines=d.splitTextToSize(String(t||'—'),170);check(lines.length*4.5+3);d.text(lines,20,y);y+=lines.length*4.5+3},label=(k,v)=>{if(v===undefined||v===null||v==='')v='—';d.setFont('helvetica','bold');d.setFontSize(8);d.setTextColor(60);let lines=d.splitTextToSize(`${k}: ${v}`,170);check(lines.length*4+2);d.text(lines,20,y);y+=lines.length*4+2};
+  d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(18);d.text('PERLENTAUCHER',20,y);y+=7;d.setFontSize(10);d.text(`ACTA DE OBRA ${m.no}`,20,y);y+=11;d.setTextColor(30);d.setFontSize(15);d.text(m.work,20,y);y+=8;d.setFontSize(12);d.text(m.title,20,y);y+=8;d.setFont('helvetica','normal');d.setFontSize(8);d.text(`${m.date} · ${m.author} · ${incidents.length} incidencia(s)`,20,y);y+=9;if(m.notes){text(m.notes,9);y+=2}
+  for(let i of incidents){check(28);d.setDrawColor(210);d.line(20,y,190,y);y+=6;d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(11);let head=[];if(o.number)head.push(i.no);if(o.title)head.push(i.title);d.text(d.splitTextToSize(head.join(' · ')||'Incidencia',170),20,y);y+=7;
+    if(o.status)label('Estado',i.status);if(o.categories)label('Categorías',catsOf(i).join(', '));if(o.responsibles)label('Responsables',respsOf(i).join(', '));if(o.priority)label('Prioridad',i.priority);if(o.zone)label('Zona',i.zone);if(o.location)label('Ubicación',i.location);if(o.dueDate)label('Fecha límite',i.dueDate);
+    if(o.description){d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(8);d.text('DESCRIPCIÓN',20,y);y+=5;text(i.description||'—',9)}
+    if(o.photos){let pics=minutePhotoFiles(i);if(pics.length){d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(8);check(10);d.text('FOTOGRAFÍAS',20,y);y+=5;let st={y};await minuteAddPhotosPDF(d,pics,st);y=st.y}}
+    if(o.plan&&i.planCapture){let st={y};await minuteAddPlanPDF(d,i,st);y=st.y}
+    if(o.followup&&(i.history||[]).length){d.setTextColor(...g);d.setFont('helvetica','bold');d.setFontSize(8);check(10);d.text('SEGUIMIENTOS',20,y);y+=5;for(let h of i.history){let line=`${h.date||''} · ${h.author||''}${h.status?' · '+h.status:''}\n${h.text||''}`;text(line,8)}}
+    y+=4;
+  }
+  let pages=d.getNumberOfPages();for(let p=1;p<=pages;p++){d.setPage(p);d.setFont('helvetica','normal');d.setFontSize(8);d.setTextColor(70);d.text(`Generado por: ${m.author}`,20,287);d.text(`Página ${p} de ${pages}`,190,287,{align:'right'})}d.save(`${m.work} - ${m.title} - ${m.no}.pdf`)
+}
+async function reportMinuteWord(id){
+  let m=db.minutes.find(x=>x.id===id);if(!m)return;let incidents=m.snapshot||((m.incidents||[]).map(x=>db.incidents.find(i=>i.id===x)).filter(Boolean)),o=minuteOptions(m);
+  const imgData=async f=>{let x=await minuteLoadImage(f.url);return x?x.data:null};
+  let body=`<h1>PERLENTAUCHER</h1><h3>ACTA DE OBRA ${esc(m.no)}</h3><h2>${esc(m.work)}</h2><h3>${esc(m.title)}</h3><p>${esc(m.date)} · ${esc(m.author)} · ${incidents.length} incidencia(s)</p>${m.notes?`<p>${esc(m.notes).replace(/\n/g,'<br>')}</p>`:''}`;
+  for(let i of incidents){let heading=[];if(o.number)heading.push(esc(i.no));if(o.title)heading.push(esc(i.title));body+=`<hr><h3>${heading.join(' · ')||'Incidencia'}</h3><table>`;if(o.status)body+=`<tr><td><b>Estado</b></td><td>${esc(i.status||'—')}</td></tr>`;if(o.categories)body+=`<tr><td><b>Categorías</b></td><td>${esc(catsOf(i).join(', ')||'—')}</td></tr>`;if(o.responsibles)body+=`<tr><td><b>Responsables</b></td><td>${esc(respsOf(i).join(', ')||'—')}</td></tr>`;if(o.priority)body+=`<tr><td><b>Prioridad</b></td><td>${esc(i.priority||'—')}</td></tr>`;if(o.zone)body+=`<tr><td><b>Zona</b></td><td>${esc(i.zone||'—')}</td></tr>`;if(o.location)body+=`<tr><td><b>Ubicación</b></td><td>${esc(i.location||'—')}</td></tr>`;if(o.dueDate)body+=`<tr><td><b>Fecha límite</b></td><td>${esc(i.dueDate||'—')}</td></tr>`;body+='</table>';if(o.description)body+=`<h4>Descripción</h4><p>${esc(i.description||'—').replace(/\n/g,'<br>')}</p>`;
+    if(o.photos){let pics=minutePhotoFiles(i);if(pics.length){body+='<h4>Fotografías</h4><div class=photos>';for(let f of pics){let data=await imgData(f);if(data)body+=`<img src="${data}">`}body+='</div>'}}
+    if(o.plan&&i.planCapture){let shot=await renderPlanCapture(i.planCapture);if(shot)body+=`<h4>Localización en plano</h4><p>${esc(i.planCapture.planName||'Plano')} · Rev. ${esc(i.planCapture.planRev||'—')} · Página ${shot.page}</p><img class=plan src="${shot.data}">`}
+    if(o.followup&&(i.history||[]).length){body+='<h4>Seguimientos</h4>';for(let h of i.history)body+=`<p><b>${esc(h.date||'')} · ${esc(h.author||'')} · ${esc(h.status||'')}</b><br>${esc(h.text||'').replace(/\n/g,'<br>')}</p>`}
+  }
+  let html=`<html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;margin:38px;color:#17201b}h1,h3,h4{color:#5d856f}table{width:100%;border-collapse:collapse;margin:8px 0 12px}td{padding:5px;border-bottom:1px solid #ddd;vertical-align:top}.photos{display:flex;flex-wrap:wrap;gap:10px}.photos img,.plan{max-width:300px;max-height:240px;object-fit:contain;margin:5px;border:1px solid #ddd}hr{border:0;border-top:1px solid #ccc;margin:18px 0}</style></head><body>${body}</body></html>`;
+  let a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff',html],{type:'application/msword'}));a.download=`${m.work} - ${m.title} - ${m.no}.doc`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)
+}
+// ===== FIN ACTAS CONFIGURABLES =====
+
 // ===== FIN MEJORAS PILOTO =====
 
 function closeModal(){$('#modal').classList.add('hidden')}if('serviceWorker'in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});render();pullCloud(true);setInterval(()=>pullCloud(false),5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullCloud(false)});
