@@ -1063,7 +1063,7 @@ reportMinuteWord=async function(id){
   let m=db.minutes.find(x=>x.id===id);if(!m)return;
   if(!window.docx)return alert('No se ha podido cargar el generador Word. Comprueba la conexión y vuelve a intentarlo.');
   try{
-    const {Document,Packer,Paragraph,TextRun,ImageRun,HeadingLevel,AlignmentType}=window.docx;
+    const {Document,Packer,Paragraph,TextRun,ImageRun,HeadingLevel,AlignmentType,Table,TableRow,TableCell,WidthType,BorderStyle}=window.docx;
     let incidents=m.snapshot||((m.incidents||[]).map(x=>db.incidents.find(i=>i.id===x)).filter(Boolean)),o=minuteOptions(m),children=[];
     const txt=v=>String(v===undefined||v===null||v===''?'—':v);
     const p=(text,opt={})=>new Paragraph({children:[new TextRun({text:txt(text),bold:!!opt.bold,size:opt.size||20,color:opt.color})],spacing:{after:opt.after??100}});
@@ -1087,7 +1087,13 @@ reportMinuteWord=async function(id){
       if(o.dueDate)children.push(p(`Fecha límite: ${txt(i.dueDate)}`));
       if(o.description){children.push(heading('Descripción',HeadingLevel.HEADING_3));children.push(p(i.description||'—'));}
       if(o.photos){
-        let pics=minutePhotoFiles(i);if(pics.length){children.push(heading('Fotografías',HeadingLevel.HEADING_3));for(let f of pics){let x=await minuteLoadImage(f.url);if(x)children.push(imageParagraph(x.data,x.img.width,x.img.height));}}
+        let pics=minutePhotoFiles(i);if(pics.length){
+          children.push(heading('Fotografías',HeadingLevel.HEADING_3));
+          let loaded=[];for(let f of pics){let x=await minuteLoadImage(f.url);if(x)loaded.push(x)}
+          const imageCell=x=>{let maxW=250,maxH=200,r=Math.min(maxW/Math.max(1,x.img.width),maxH/Math.max(1,x.img.height),1),ww=Math.max(1,Math.round(x.img.width*r)),hh=Math.max(1,Math.round(x.img.height*r));return new TableCell({width:{size:50,type:WidthType.PERCENTAGE},borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({data:dataBytes(x.data),transformation:{width:ww,height:hh}})],spacing:{after:80}})]})};
+          let rows=[];for(let n=0;n<loaded.length;n+=2){let pair=loaded.slice(n,n+2),cells=pair.map(imageCell);if(cells.length===1)cells.push(new TableCell({width:{size:50,type:WidthType.PERCENTAGE},borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},children:[new Paragraph('')]}));rows.push(new TableRow({children:cells}))}
+          if(rows.length)children.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},rows}));
+        }
       }
       if(o.plan&&i.planCapture){let shot=await renderPlanCapture(i.planCapture);if(shot){children.push(heading('Localización en plano',HeadingLevel.HEADING_3));children.push(imageParagraph(shot.data,shot.width,shot.height));}}
       if(o.followup&&(i.history||[]).length){children.push(heading('Seguimientos',HeadingLevel.HEADING_3));for(let h of i.history){children.push(p(`${h.date||''} · ${h.author||''}${h.status?' · '+h.status:''}`,{bold:true,size:18,after:40}));children.push(p(h.text||'',{size:18,after:100}));}}
