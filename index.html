@@ -1063,42 +1063,47 @@ reportMinuteWord=async function(id){
   let m=db.minutes.find(x=>x.id===id);if(!m)return;
   if(!window.docx)return alert('No se ha podido cargar el generador Word. Comprueba la conexión y vuelve a intentarlo.');
   try{
-    const {Document,Packer,Paragraph,TextRun,ImageRun,HeadingLevel,AlignmentType,Table,TableRow,TableCell,WidthType,BorderStyle}=window.docx;
+    const {Document,Packer,Paragraph,TextRun,ImageRun,AlignmentType,Table,TableRow,TableCell,WidthType,BorderStyle}=window.docx;
     let incidents=m.snapshot||((m.incidents||[]).map(x=>db.incidents.find(i=>i.id===x)).filter(Boolean)),o=minuteOptions(m),children=[];
+    const GREEN='5D856F',DARK='1E1E1E',GRAY='464646',FONT='Arial';
     const txt=v=>String(v===undefined||v===null||v===''?'—':v);
-    const p=(text,opt={})=>new Paragraph({children:[new TextRun({text:txt(text),bold:!!opt.bold,size:opt.size||20,color:opt.color})],spacing:{after:opt.after??100}});
-    const heading=(text,level=HeadingLevel.HEADING_2)=>new Paragraph({text:txt(text),heading:level,spacing:{before:160,after:100}});
+    const run=(text,opt={})=>new TextRun({text:txt(text),font:FONT,bold:!!opt.bold,size:opt.size||18,color:opt.color||DARK});
+    const para=(text,opt={})=>new Paragraph({children:[run(text,opt)],spacing:{before:opt.before||0,after:opt.after??60,line:240}});
+    const sectionTitle=text=>new Paragraph({children:[run(String(text).toUpperCase(),{bold:true,size:16,color:GREEN})],spacing:{before:80,after:50,line:220}});
+    const incidentTitle=text=>new Paragraph({children:[run(text,{bold:true,size:22,color:GREEN})],spacing:{before:100,after:70,line:240},border:{top:{style:BorderStyle.SINGLE,size:4,color:'D2D2D2',space:6}}});
+    const field=(label,value)=>new Paragraph({children:[run(label+': ',{bold:true,size:16,color:'3C3C3C'}),run(txt(value),{size:16,color:'3C3C3C'})],spacing:{after:40,line:220}});
     const dataBytes=dataUrl=>{let b64=String(dataUrl||'').split(',')[1]||'',bin=atob(b64),a=new Uint8Array(bin.length);for(let n=0;n<bin.length;n++)a[n]=bin.charCodeAt(n);return a};
-    const imageParagraph=(dataUrl,w,h)=>{let maxW=300,maxH=240,r=Math.min(maxW/Math.max(1,w),maxH/Math.max(1,h),1),ww=Math.max(1,Math.round(w*r)),hh=Math.max(1,Math.round(h*r));return new Paragraph({children:[new ImageRun({data:dataBytes(dataUrl),transformation:{width:ww,height:hh}})],spacing:{after:120}})};
-    children.push(new Paragraph({children:[new TextRun({text:'PERLENTAUCHER',bold:true,size:36,color:'5D856F'})],spacing:{after:80}}));
-    children.push(new Paragraph({children:[new TextRun({text:`ACTA DE OBRA ${m.no}`,bold:true,size:22,color:'5D856F'})],spacing:{after:140}}));
-    children.push(new Paragraph({children:[new TextRun({text:txt(m.work),bold:true,size:28})],spacing:{after:80}}));
-    children.push(new Paragraph({children:[new TextRun({text:txt(m.title),bold:true,size:24})],spacing:{after:80}}));
-    children.push(p(`${m.date} · ${m.author} · ${incidents.length} incidencia(s)`,{size:18,after:140}));
-    if(m.notes)children.push(p(m.notes,{size:20,after:160}));
+    const imageParagraph=(dataUrl,w,h)=>{let maxW=300,maxH=240,r=Math.min(maxW/Math.max(1,w),maxH/Math.max(1,h),1),ww=Math.max(1,Math.round(w*r)),hh=Math.max(1,Math.round(h*r));return new Paragraph({children:[new ImageRun({data:dataBytes(dataUrl),transformation:{width:ww,height:hh}})],spacing:{after:100}})};
+    children.push(new Paragraph({children:[run('PERLENTAUCHER',{bold:true,size:36,color:GREEN})],spacing:{after:70}}));
+    children.push(new Paragraph({children:[run(`ACTA DE OBRA ${m.no}`,{bold:true,size:20,color:GREEN})],spacing:{after:110}}));
+    children.push(new Paragraph({children:[run(txt(m.work),{bold:true,size:30,color:DARK})],spacing:{after:80}}));
+    children.push(new Paragraph({children:[run(txt(m.title),{bold:true,size:24,color:DARK})],spacing:{after:80}}));
+    children.push(para(`${m.date} · ${m.author} · ${incidents.length} incidencia(s)`,{size:16,color:GRAY,after:130}));
+    if(m.notes)children.push(para(m.notes,{size:18,after:140}));
     for(let i of incidents){
-      let head=[];if(o.number)head.push(i.no);if(o.title)head.push(i.title);children.push(heading(head.join(' · ')||'Incidencia'));
-      if(o.status)children.push(p(`Estado: ${txt(i.status)}`));
-      if(o.categories)children.push(p(`Categorías: ${txt(catsOf(i).join(', '))}`));
-      if(o.responsibles)children.push(p(`Responsables: ${txt(respsOf(i).join(', '))}`));
-      if(o.priority)children.push(p(`Prioridad: ${txt(i.priority)}`));
-      if(o.zone)children.push(p(`Zona: ${txt(i.zone)}`));
-      if(o.location)children.push(p(`Ubicación: ${txt(i.location)}`));
-      if(o.dueDate)children.push(p(`Fecha límite: ${txt(i.dueDate)}`));
-      if(o.description){children.push(heading('Descripción',HeadingLevel.HEADING_3));children.push(p(i.description||'—'));}
+      let head=[];if(o.number)head.push(i.no);if(o.title)head.push(i.title);children.push(incidentTitle(head.join(' · ')||'Incidencia'));
+      if(o.status)children.push(field('Estado',i.status));
+      if(o.categories)children.push(field('Categorías',catsOf(i).join(', ')));
+      if(o.responsibles)children.push(field('Responsables',respsOf(i).join(', ')));
+      if(o.priority)children.push(field('Prioridad',i.priority));
+      if(o.zone)children.push(field('Zona',i.zone));
+      if(o.location)children.push(field('Ubicación',i.location));
+      if(o.dueDate)children.push(field('Fecha límite',i.dueDate));
+      if(o.description){children.push(sectionTitle('Descripción'));children.push(para(i.description||'—',{size:18,after:90}));}
       if(o.photos){
         let pics=minutePhotoFiles(i);if(pics.length){
-          children.push(heading('Fotografías',HeadingLevel.HEADING_3));
+          children.push(sectionTitle('Fotografías'));
           let loaded=[];for(let f of pics){let x=await minuteLoadImage(f.url);if(x)loaded.push(x)}
-          const imageCell=x=>{let maxW=250,maxH=200,r=Math.min(maxW/Math.max(1,x.img.width),maxH/Math.max(1,x.img.height),1),ww=Math.max(1,Math.round(x.img.width*r)),hh=Math.max(1,Math.round(x.img.height*r));return new TableCell({width:{size:50,type:WidthType.PERCENTAGE},borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new ImageRun({data:dataBytes(x.data),transformation:{width:ww,height:hh}})],spacing:{after:80}})]})};
-          let rows=[];for(let n=0;n<loaded.length;n+=2){let pair=loaded.slice(n,n+2),cells=pair.map(imageCell);if(cells.length===1)cells.push(new TableCell({width:{size:50,type:WidthType.PERCENTAGE},borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},children:[new Paragraph('')]}));rows.push(new TableRow({children:cells}))}
-          if(rows.length)children.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideHorizontal:{style:BorderStyle.NONE},insideVertical:{style:BorderStyle.NONE}},rows}));
+          const noBorder={style:BorderStyle.NONE,size:0,color:'FFFFFF'};
+          const imageCell=x=>{let maxW=250,maxH=200,r=Math.min(maxW/Math.max(1,x.img.width),maxH/Math.max(1,x.img.height),1),ww=Math.max(1,Math.round(x.img.width*r)),hh=Math.max(1,Math.round(x.img.height*r));return new TableCell({width:{size:50,type:WidthType.PERCENTAGE},borders:{top:noBorder,bottom:noBorder,left:noBorder,right:noBorder},margins:{top:0,bottom:80,left:0,right:80},children:[new Paragraph({alignment:AlignmentType.LEFT,children:[new ImageRun({data:dataBytes(x.data),transformation:{width:ww,height:hh}})],spacing:{after:0}})]})};
+          let rows=[];for(let n=0;n<loaded.length;n+=2){let pair=loaded.slice(n,n+2),cells=pair.map(imageCell);if(cells.length===1)cells.push(new TableCell({width:{size:50,type:WidthType.PERCENTAGE},borders:{top:noBorder,bottom:noBorder,left:noBorder,right:noBorder},children:[new Paragraph('')]}));rows.push(new TableRow({children:cells}))}
+          if(rows.length)children.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},borders:{top:noBorder,bottom:noBorder,left:noBorder,right:noBorder,insideHorizontal:noBorder,insideVertical:noBorder},rows}));
         }
       }
-      if(o.plan&&i.planCapture){let shot=await renderPlanCapture(i.planCapture);if(shot){children.push(heading('Localización en plano',HeadingLevel.HEADING_3));children.push(imageParagraph(shot.data,shot.width,shot.height));}}
-      if(o.followup&&(i.history||[]).length){children.push(heading('Seguimientos',HeadingLevel.HEADING_3));for(let h of i.history){children.push(p(`${h.date||''} · ${h.author||''}${h.status?' · '+h.status:''}`,{bold:true,size:18,after:40}));children.push(p(h.text||'',{size:18,after:100}));}}
+      if(o.plan&&i.planCapture){let shot=await renderPlanCapture(i.planCapture);if(shot){children.push(sectionTitle('Localización en plano'));children.push(imageParagraph(shot.data,shot.width,shot.height));}}
+      if(o.followup&&(i.history||[]).length){children.push(sectionTitle('Seguimientos'));for(let h of i.history){children.push(para(`${h.date||''} · ${h.author||''}${h.status?' · '+h.status:''}`,{bold:true,size:16,color:GRAY,after:25}));children.push(para(h.text||'',{size:16,after:80}));}}
     }
-    let doc=new Document({sections:[{properties:{page:{margin:{top:720,right:720,bottom:720,left:720}}},children}]});
+    let doc=new Document({styles:{default:{document:{run:{font:FONT,size:18,color:DARK},paragraph:{spacing:{line:240}}}}},sections:[{properties:{page:{margin:{top:1020,right:1134,bottom:1020,left:1134}}},children}]});
     let blob=await Packer.toBlob(doc),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${m.work} - ${m.title} - ${m.no}.docx`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
   }catch(e){console.error('Error generando Word del acta',e);alert('No se pudo generar el Word. Vuelve a intentarlo y, si continúa, avísame.');}
 }
